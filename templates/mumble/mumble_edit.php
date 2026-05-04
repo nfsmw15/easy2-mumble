@@ -126,8 +126,9 @@ $mb_supw = $mumble->getSuperUserPassword($mb_sid);
                         <div class="input-group-prepend">
                             <span class="input-group-text"><i class="fa fa-lock"></i></span>
                         </div>
-                        <input type="password" class="form-control" id="mb-supw-field" readonly
-                               value="<?php echo htmlspecialchars($mb_supw ?? '(unbekannt)'); ?>">
+                        <input type="text" class="form-control" id="mb-supw-field" readonly
+                               value="••••••••••••"
+                               data-pw="<?php echo htmlspecialchars($mb_supw ?? ''); ?>">
                         <div class="input-group-append">
                             <button class="btn btn-outline-secondary" type="button" id="mb-supw-toggle"
                                     title="Passwort anzeigen/verstecken">
@@ -139,8 +140,7 @@ $mb_supw = $mumble->getSuperUserPassword($mb_sid);
                             </button>
                         </div>
                     </div>
-                    <form method="post" action="?p=mumble_edit&id=<?php echo (int)$mb_srv['id']; ?>&c=superuser_reset"
-                          onsubmit="return confirm('SuperUser-Passwort wirklich zurücksetzen? Das alte ist danach ungültig.');">
+                    <form id="mb-form-supw-reset" method="post" action="?p=mumble_edit&id=<?php echo (int)$mb_srv['id']; ?>&c=superuser_reset">
                         <input type="hidden" name="csrf" value="<?php echo $mb_csrf; ?>">
                         <div class="form-row align-items-end">
                             <div class="form-group col-md-8 mb-0">
@@ -210,8 +210,7 @@ $mb_supw = $mumble->getSuperUserPassword($mb_sid);
                         <i class="fa fa-file-code-o"></i> Server-Config (INI) bearbeiten
                     </a>
                     <hr>
-                    <form method="post" action="?p=mumble&c=delete"
-                          onsubmit="return confirm('Server wirklich endgültig löschen?');">
+                    <form id="mb-form-delete" method="post" action="?p=mumble&c=delete">
                         <input type="hidden" name="csrf" value="<?php echo $mb_csrf; ?>">
                         <input type="hidden" name="id" value="<?php echo (int)$mb_srv['id']; ?>">
                         <button class="btn btn-danger btn-block">
@@ -265,32 +264,4 @@ $mb_supw = $mumble->getSuperUserPassword($mb_sid);
 </div>
 </div>
 
-<script>
-(function () {
-    'use strict';
-    // SuperUser PW reveal toggle
-    var f = document.getElementById('mb-supw-field');
-    var b = document.getElementById('mb-supw-toggle');
-    var i = document.getElementById('mb-supw-icon');
-    if (f && b) {
-        b.addEventListener('click', function () {
-            if (f.type === 'password') {
-                f.type = 'text'; i.className = 'fa fa-eye-slash';
-            } else {
-                f.type = 'password'; i.className = 'fa fa-eye';
-            }
-        });
-    }
-    // Copy
-    var cb = document.getElementById('mb-supw-copy');
-    if (cb && f) {
-        cb.addEventListener('click', function () {
-            var old = f.type; f.type = 'text';
-            f.select(); document.execCommand('copy');
-            f.type = old;
-            cb.innerHTML = '<i class="fa fa-check"></i>';
-            setTimeout(function () { cb.innerHTML = '<i class="fa fa-clipboard"></i>'; }, 2000);
-        });
-    }
-})();
-</script>
+<script src="system/js/mumble-edit.js"></script>
