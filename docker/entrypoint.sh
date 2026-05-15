@@ -1,14 +1,14 @@
 #!/bin/bash
 set -uo pipefail
 
-# ── Konfiguration aus Umgebungsvariablen ────────────────────────────────────
+# ── Konfiguration ────────────────────────────────────────────────────────────
 DB_HOST="${DB_HOST:-db}"
 DB_PORT="${DB_PORT:-3306}"
 DB_NAME="${DB_NAME:-easy2mumble}"
 DB_USER="${DB_USER:-easy2}"
 DB_PASS="${DB_PASS:-changeme}"
-DB_PREFIX="${DB_PREFIX:-ml}"          # kurzes Prefix (z.B. "ml")
-FULL_PREFIX="${DB_PREFIX}_ml"         # volles CMS-Prefix (z.B. "ml_ml")
+DB_PREFIX="${DB_PREFIX:-ml}"           # kurzes Prefix  → "ml"
+CMS_PREFIX="${DB_PREFIX}_ml"           # CMS Prefix     → "ml_ml"  (= Prefix-Konstante in PHP)
 ADMIN_USER="${ADMIN_USER:-admin}"
 ADMIN_PASS="${ADMIN_PASS:-changeme}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@example.com}"
@@ -32,25 +32,24 @@ echo "[entrypoint] MariaDB erreichbar."
 if [[ ! -f "$INIT_MARKER" ]]; then
     echo "[entrypoint] Erstinstallation wird durchgeführt..."
 
-    # Easy2 Basistabellen — nutzen [prefix]_ml_* → kurzes Prefix
+    # Alle SQL-Dateien nutzen [prefix]_ml_* Format → kurzes Prefix einsetzen
     for sql in /docker-init/easy2-sql/*.sql; do
         echo "  → $(basename $sql)"
         sed "s/\[prefix\]/${DB_PREFIX}/g" "$sql" | mysql_cmd 2>/dev/null || true
     done
 
-    # easy2-mumble — nutzt [prefix]_mumble_* → volles Prefix
     echo "  → easy2-mumble install.sql"
-    sed "s/\[prefix\]/${FULL_PREFIX}/g" /docker-init/sql/install.sql | mysql_cmd
+    sed "s/\[prefix\]/${DB_PREFIX}/g" /docker-init/sql/install.sql | mysql_cmd
 
     # config.inc.php schreiben
     cat > "$CONFIG" << PHPEOF
 <?php
 \$db_config = [
-    'host'     => '${DB_HOST}',
-    'database' => '${DB_NAME}',
-    'prefix'   => '${FULL_PREFIX}',
-    'user'     => '${DB_USER}',
-    'passwd'   => '${DB_PASS}',
+    'host'     => '$DB_HOST',
+    'database' => '$DB_NAME',
+    'prefix'   => '$CMS_PREFIX',
+    'user'     => '$DB_USER',
+    'passwd'   => '$DB_PASS',
 ];
 define('Prefix', \$db_config['prefix']);
 try {
@@ -66,27 +65,27 @@ try {
 }
 PHPEOF
 
-    # Site-Titel setzen (tag/value Spalten in _ml_main)
+    # Admin-User anlegen und Site-Titel setzen
     PASS_HASH=$(php -r "echo password_hash('${ADMIN_PASS}', PASSWORD_BCRYPT);")
 
     mysql_cmd << SQL
-UPDATE \`${FULL_PREFIX}_main\` SET value='${SITE_TITLE}'       WHERE tag='site_title';
-UPDATE \`${FULL_PREFIX}_main\` SET value='${SITE_TITLE_SHORT}' WHERE tag='short_site_title';
-UPDATE \`${FULL_PREFIX}_main\` SET value='0'                   WHERE tag='regist_active';
+UPDATE \`${CMS_PREFIX}_main\` SET value='${SITE_TITLE}'       WHERE tag='site_title';
+UPDATE \`${CMS_PREFIX}_main\` SET value='${SITE_TITLE_SHORT}' WHERE tag='short_site_title';
+UPDATE \`${CMS_PREFIX}_main\` SET value='0'                   WHERE tag='regist_active';
 
-INSERT IGNORE INTO \`${FULL_PREFIX}_user\`
+INSERT IGNORE INTO \`${CMS_PREFIX}_user\`
   (username, password, email, active, rank)
 SELECT '${ADMIN_USER}', '${PASS_HASH}', '${ADMIN_EMAIL}', 1,
-       (SELECT id FROM \`${FULL_PREFIX}_ranks\` WHERE special='bold' LIMIT 1)
+       (SELECT id FROM \`${CMS_PREFIX}_ranks\` WHERE special='bold' LIMIT 1)
 WHERE NOT EXISTS (
-  SELECT 1 FROM \`${FULL_PREFIX}_user\` WHERE username='${ADMIN_USER}'
+  SELECT 1 FROM \`${CMS_PREFIX}_user\` WHERE username='${ADMIN_USER}'
 );
 SQL
 
-    # install/-Ordner entfernen
+    # install/-Ordner entfernen (Sicherheit)
     rm -rf "$WEBROOT/install"
 
-    # Snippets einspielen — <?php Tag überspringen beim Anhängen
+    # Snippets einspielen — <?php überspringen da Datei es schon hat
     if ! grep -q 'Easy2-Mumble' "$WEBROOT/system/classes.run.user.php" 2>/dev/null; then
         grep -v '^<?php' /docker-init/snippets/classes.run.user.php >> "$WEBROOT/system/classes.run.user.php"
     fi
@@ -99,7 +98,6 @@ SQL
 fi
 
 # ── Migrationen ausführen ────────────────────────────────────────────────────
-# Migrations nutzen [prefix]_ml_* → kurzes Prefix (wie Easy2 SQL)
 for mig in /docker-init/sql/migrate_v*.sql; do
     marker="$WEBROOT/system/.migrated_$(basename "$mig" .sql)"
     if [[ ! -f "$marker" ]]; then

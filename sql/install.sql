@@ -10,7 +10,7 @@
 SET NAMES utf8mb4;
 SET CHARACTER SET utf8mb4;
 
-CREATE TABLE IF NOT EXISTS `[prefix]_mumble_host` (
+CREATE TABLE IF NOT EXISTS `[prefix]_ml_mumble_host` (
   `id`            INT UNSIGNED  NOT NULL AUTO_INCREMENT,
   `name`          VARCHAR(64)   NOT NULL,
   `hostname`      VARCHAR(255)  NOT NULL,
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS `[prefix]_mumble_host` (
   UNIQUE KEY `uniq_name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `[prefix]_mumble_server` (
+CREATE TABLE IF NOT EXISTS `[prefix]_ml_mumble_server` (
   `id`            INT UNSIGNED  NOT NULL AUTO_INCREMENT,
   `host_id`       INT UNSIGNED  NOT NULL,
   `owner_user_id` INT UNSIGNED  NOT NULL,
@@ -48,11 +48,11 @@ CREATE TABLE IF NOT EXISTS `[prefix]_mumble_server` (
   KEY `idx_owner` (`owner_user_id`),
   UNIQUE KEY `uniq_host_port` (`host_id`,`port`),
   CONSTRAINT `fk_mms_host`
-    FOREIGN KEY (`host_id`) REFERENCES `[prefix]_mumble_host`(`id`)
+    FOREIGN KEY (`host_id`) REFERENCES `[prefix]_ml_mumble_host`(`id`)
     ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `[prefix]_mumble_log` (
+CREATE TABLE IF NOT EXISTS `[prefix]_ml_mumble_log` (
   `id`          INT UNSIGNED  NOT NULL AUTO_INCREMENT,
   `server_id`   INT UNSIGNED  DEFAULT NULL,
   `user_id`     INT UNSIGNED  NOT NULL,
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS `[prefix]_mumble_log` (
   KEY `idx_date`   (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `[prefix]_mumble_quota` (
+CREATE TABLE IF NOT EXISTS `[prefix]_ml_mumble_quota` (
   `id`             INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `rank_id`        INT UNSIGNED NOT NULL,
   `max_servers`    INT UNSIGNED NOT NULL DEFAULT 0,
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS `[prefix]_mumble_quota` (
   UNIQUE KEY `uniq_rank` (`rank_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO `[prefix]_mumble_quota`
+INSERT INTO `[prefix]_ml_mumble_quota`
   (`rank_id`,`max_servers`,`max_users_cap`,`can_create`,`can_admin_all`)
 VALUES
   (1, 999, 250, 1, 1),
@@ -89,7 +89,7 @@ ON DUPLICATE KEY UPDATE `rank_id`=`rank_id`;
 -- Integration ins Core (Sites, Rules, Menu) - IDs ab 200
 -- ------------------------------------------------------------
 
-INSERT INTO `[prefix]_sites`
+INSERT INTO `[prefix]_ml_sites`
   (`id`, `filename`, `dir`, `title`, `start_site`, `start_site_login`, `errorsite`, `type`, `logout_site`)
 VALUES
   (200, 'mumble',       'mumble/', 'Mumble-Server',           0, 0, 0, 'php', 0),
@@ -100,7 +100,7 @@ VALUES
   (205, 'mumble_quota', 'mumble/', 'Mumble-Quotas verwalten', 0, 0, 0, 'php', 0)
 ON DUPLICATE KEY UPDATE `title`=VALUES(`title`);
 
-INSERT INTO `[prefix]_rules` (`id`, `name`, `tag`, `description`) VALUES
+INSERT INTO `[prefix]_ml_rules` (`id`, `name`, `tag`, `description`) VALUES
   (200, 'Mumble: Ansehen',              'mumble_view',   'Darf die Mumble-Serverübersicht sehen'),
   (201, 'Mumble: Server erstellen',     'mumble_create', 'Darf neue Mumble-Server anlegen'),
   (202, 'Mumble: Fremdserver verwalten','mumble_admin',  'Darf alle Mumble-Server verwalten'),
@@ -108,7 +108,7 @@ INSERT INTO `[prefix]_rules` (`id`, `name`, `tag`, `description`) VALUES
   (204, 'Mumble: Quotas verwalten',     'mumble_quota',  'Darf Quota-Regeln pro Rang bearbeiten')
 ON DUPLICATE KEY UPDATE `name`=VALUES(`name`), `description`=VALUES(`description`);
 
-INSERT INTO `[prefix]_menu`
+INSERT INTO `[prefix]_ml_menu`
   (`id`, `sid`, `title`, `icon`, `pos`, `url`, `under`, `menu`, `link_type`, `target`)
 VALUES
   (200, 200, 'Mumble',          'fa-headphones', 10, '', 0,   1, 0, '_self'),
