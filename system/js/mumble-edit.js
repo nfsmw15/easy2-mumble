@@ -70,10 +70,10 @@
     copyText('mb-widget-code', 'mb-widget-copy-code');
 
     // --- Channel-Viewer ---
-    var viewerBox = document.getElementById('mb-viewer-content');
-    var viewerUrl = (typeof MB_VIEWER_URL !== 'undefined') ? MB_VIEWER_URL : null;
+    var viewerBox    = document.getElementById('mb-viewer-content');
+    var viewerUrl    = viewerBox ? viewerBox.getAttribute('data-viewer-url') : null;
+    var serverName   = viewerBox ? (viewerBox.getAttribute('data-server-name') || '') : '';
     var refreshTimer = null;
-    var refreshInterval = 0; // 0 = kein Auto-Refresh (wird nach erstem Load gesetzt)
 
     function renderChannel(ch, depth) {
         depth = depth || 0;
@@ -110,15 +110,16 @@
                 html += '<div style="margin-bottom:6px;font-size:11px;color:#888;">';
                 html += '<strong>' + (data.user_count || 0) + '</strong> Nutzer online';
                 html += '</div>';
+                // Server-Namen als Root-Anzeige verwenden
+                if (serverName && data.channels) {
+                    data.channels.name = serverName;
+                }
                 html += renderChannel(data.channels);
                 html += '</div>';
                 viewerBox.innerHTML = html;
 
                 // Refresh-Intervall aus den Widget-Settings lesen (via data-Attribut)
-                var ri = parseInt(viewerBox.getAttribute('data-refresh') || '0', 10);
-                if (ri > 0 && !refreshTimer) {
-                    refreshTimer = setInterval(loadViewer, ri * 1000);
-                }
+                // Kein Auto-Refresh im Admin-View — nur manuell per Button
             })
             .catch(function () {
                 viewerBox.innerHTML = '<p class="text-muted small p-3 mb-0">Viewer nicht verfügbar.</p>';
@@ -128,14 +129,6 @@
     var refreshBtn = document.getElementById('mb-viewer-refresh');
     if (refreshBtn) {
         refreshBtn.addEventListener('click', loadViewer);
-    }
-
-    // Refresh-Intervall aus Widget-Settings (data-Attribut wird vom Template gesetzt)
-    if (viewerBox) {
-        var ri = parseInt(viewerBox.getAttribute('data-refresh') || '0', 10);
-        if (ri > 0) {
-            refreshTimer = setInterval(loadViewer, ri * 1000);
-        }
     }
 
     if (viewerBox && viewerUrl) {

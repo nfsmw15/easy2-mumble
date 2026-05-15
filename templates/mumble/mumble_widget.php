@@ -35,6 +35,9 @@ $refresh = (int)$srv['widget_refresh'];
 $agent   = new mumble_agent($srv['agent_url'], $srv['agent_token']);
 $res     = $agent->getViewer((string)$srv['container_id']);
 $data    = ($res['ok'] && isset($res['data']['channels'])) ? $res['data'] : null;
+if ($data && isset($data['channels'])) {
+    $data['channels']['name'] = (string)$srv['name']; // Server-Name statt "Root"
+}
 
 function render_channel(array $ch, int $depth = 0): void {
     $indent = $depth * 14;

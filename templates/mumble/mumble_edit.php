@@ -176,11 +176,9 @@ $mb_widget_iframe  = $mb_widget_token !== ''
                 </div>
             </div>
             <?php } ?>
-        </div>
 
-        <!-- Channel-Viewer -->
-        <div class="col-md-12 mb-4">
-            <div class="card">
+            <!-- Channel-Viewer -->
+            <div class="card mb-4">
                 <div class="card-header d-flex align-items-center justify-content-between">
                     <span><i class="fa fa-sitemap"></i> Channel-Viewer</span>
                     <button class="btn btn-sm btn-outline-secondary" id="mb-viewer-refresh" title="Aktualisieren">
@@ -189,7 +187,9 @@ $mb_widget_iframe  = $mb_widget_token !== ''
                 </div>
                 <div class="card-body p-0">
                     <div id="mb-viewer-content" style="min-height:60px;"
-                         data-refresh="<?php echo $mb_widget_refresh; ?>">
+                         data-viewer-url="?p=mumble_edit&amp;id=<?php echo (int)$mb_srv['id']; ?>&amp;c=viewer_data"
+                         data-refresh="<?php echo $mb_widget_refresh; ?>"
+                         data-server-name="<?php echo htmlspecialchars((string)$mb_srv['name']); ?>">
                         <div class="p-3 text-muted text-center small">
                             <i class="fa fa-spinner fa-spin"></i> Lade…
                         </div>
@@ -348,8 +348,4 @@ $mb_widget_iframe  = $mb_widget_token !== ''
 </div>
 </div>
 
-<script>
-var MB_VIEWER_URL = '?p=mumble_edit&id=<?php echo (int)$mb_srv['id']; ?>&c=viewer_data';
-var MB_SERVER_ID  = <?php echo (int)$mb_srv['id']; ?>;
-</script>
-<script src="system/js/mumble-edit.js"></script>
+<script src="system/js/mumble-edit.js?v=<?php echo filemtime(__DIR__.'/../../system/js/mumble-edit.js'); ?>"></script>
