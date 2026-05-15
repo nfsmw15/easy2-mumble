@@ -21,7 +21,7 @@ if (!$mumble->canView()) {
 $mb_sid = (int)($_GET['id'] ?? 0);
 $mb_srv = $mumble->getServer($mb_sid);
 $mb_uid = (int)$loginsystem->getUser('id');
-if (!$mb_srv || (!$mumble->canAdminAll() && (int)$mb_srv['owner_user_id'] !== $mb_uid)) {
+if (!$mb_srv || !$mumble->canManageServer($mb_sid)) {
     echo '<div class="content-wrapper"><div class="container full-container"><div class="alert alert-warning mt-4">Server nicht gefunden oder keine Berechtigung.</div></div></div>';
     return;
 }
@@ -289,6 +289,51 @@ $mb_widget_iframe  = $mb_widget_token !== ''
                     </form>
                 </div>
             </div>
+
+            <!-- Server-Mitglieder (nur Owner/Admin) -->
+            <?php if ($mumble->isOwner($mb_sid)): ?>
+            <div class="card mb-4">
+                <div class="card-header"><i class="fa fa-users"></i> Server-Mitglieder</div>
+                <div class="card-body">
+                    <p class="small text-muted mb-2">
+                        Mitglieder können den Server verwalten (Start/Stop, Config, SuperUser-PW, Zertifikat).
+                        Sie können den Server <strong>nicht</strong> löschen und die maximale User-Zahl nicht ändern.
+                    </p>
+                    <?php $mb_members = $mumble->getMembers($mb_sid); ?>
+                    <?php if ($mb_members): ?>
+                    <ul class="list-group list-group-flush mb-3">
+                        <?php foreach ($mb_members as $m): ?>
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-1">
+                            <span><i class="fa fa-user text-muted mr-1"></i> <?php echo htmlspecialchars((string)$m['username']); ?></span>
+                            <form method="post" action="?p=mumble_edit&id=<?php echo $mb_sid; ?>&c=member_remove">
+                                <input type="hidden" name="csrf" value="<?php echo $mb_csrf; ?>">
+                                <input type="hidden" name="user_id" value="<?php echo (int)$m['user_id']; ?>">
+                                <button type="submit" class="btn btn-xs btn-outline-danger py-0 px-1">
+                                    <i class="fa fa-times"></i>
+                                </button>
+                            </form>
+                        </li>
+                        <?php endforeach; ?>
+                    </ul>
+                    <?php endif; ?>
+                    <div class="input-group input-group-sm" style="position:relative;">
+                        <input type="text" class="form-control" id="mb-member-search"
+                               placeholder="Username suchen…" autocomplete="off"
+                               data-search-url="?p=mumble_edit&amp;id=<?php echo $mb_sid; ?>&amp;c=user_search&amp;q=">
+                        <div class="input-group-append">
+                            <button class="btn btn-outline-secondary" type="button" id="mb-member-add-btn" disabled>
+                                <i class="fa fa-plus"></i> Hinzufügen
+                            </button>
+                        </div>
+                    </div>
+                    <div id="mb-member-suggestions" class="list-group mt-1" style="position:absolute;z-index:100;width:100%;display:none;"></div>
+                    <form method="post" id="mb-member-add-form" action="?p=mumble_edit&id=<?php echo $mb_sid; ?>&c=member_add">
+                        <input type="hidden" name="csrf" value="<?php echo $mb_csrf; ?>">
+                        <input type="hidden" name="user_id" id="mb-member-uid" value="">
+                    </form>
+                </div>
+            </div>
+            <?php endif; ?>
 
             <!-- Widget-Einstellungen -->
             <div class="card mb-4">

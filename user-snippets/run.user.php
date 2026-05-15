@@ -189,6 +189,125 @@ if (strpos((string)$p, 'mumble') === 0 && $loginsystem->login_session()) {
         }
     }
 
+    /* --- Mumble-Config-Einstellungen speichern --- */
+    if ($p === 'mumble_config' && $c === 'save_settings'
+        && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST')
+    {
+        if (!$mb_csrf_ok) {
+            $error .= '<div class="alert alert-danger">CSRF-Token ungültig.</div>';
+        } else {
+            $sid = (int)($_GET['id'] ?? 0);
+            $checkboxes = ['allowhtml','rememberchannel','certrequired','suggestpositional','suggestpushtotalk','sendversion','bonjour'];
+            $data = [];
+            foreach (['bandwidth','timeout','opusthreshold','textmessagelength','imagemessagelength',
+                      'usersperchannel','defaultchannel','autoban_attempts','autoban_timeframe','autoban_time'] as $k) {
+                if (isset($_POST[$k])) { $data[$k] = (int)$_POST[$k]; }
+            }
+            foreach (['register_name','register_password','register_url','register_hostname','register_location','suggestversion'] as $k) {
+                $data[$k] = (string)($_POST[$k] ?? '');
+            }
+            foreach ($checkboxes as $k) {
+                $data[$k] = !empty($_POST[$k]);
+            }
+            $res = $mumble->saveServerSettings($sid, $data);
+            if ($res['ok']) {
+                header('Location: ?p=mumble_config&id='.$sid.'&h=settings_saved');
+                exit;
+            }
+            $error .= '<div class="alert alert-danger">Fehler: '
+                   .  htmlspecialchars((string)($res['error'] ?? 'Unbekannt')).'</div>';
+        }
+    }
+
+    /* --- Zertifikat hochladen --- */
+    if ($p === 'mumble_config' && $c === 'cert_upload'
+        && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST')
+    {
+        if (!$mb_csrf_ok) {
+            $error .= '<div class="alert alert-danger">CSRF-Token ungültig.</div>';
+        } else {
+            $sid  = (int)($_GET['id'] ?? 0);
+            $cert = trim((string)($_POST['cert_pem'] ?? ''));
+            $key  = trim((string)($_POST['key_pem'] ?? ''));
+            if ($cert === '' || $key === '') {
+                $error .= '<div class="alert alert-danger">Zertifikat und Schlüssel dürfen nicht leer sein.</div>';
+            } else {
+                $res = $mumble->setCertificate($sid, $cert, $key);
+                if ($res['ok']) {
+                    header('Location: ?p=mumble_config&id='.$sid.'&h=cert_uploaded');
+                    exit;
+                }
+                $error .= '<div class="alert alert-danger">Fehler: '
+                       .  htmlspecialchars((string)($res['error'] ?? 'Unbekannt')).'</div>';
+            }
+        }
+    }
+
+    /* --- Zertifikat entfernen --- */
+    if ($p === 'mumble_config' && $c === 'cert_remove'
+        && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST')
+    {
+        if (!$mb_csrf_ok) {
+            $error .= '<div class="alert alert-danger">CSRF-Token ungültig.</div>';
+        } else {
+            $sid = (int)($_GET['id'] ?? 0);
+            $res = $mumble->removeCertificate($sid);
+            if ($res['ok']) {
+                header('Location: ?p=mumble_config&id='.$sid.'&h=cert_removed');
+                exit;
+            }
+            $error .= '<div class="alert alert-danger">Fehler: '
+                   .  htmlspecialchars((string)($res['error'] ?? 'Unbekannt')).'</div>';
+        }
+    }
+
+    /* --- Mitglied hinzufügen --- */
+    if ($p === 'mumble_edit' && $c === 'member_add'
+        && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST')
+    {
+        if (!$mb_csrf_ok) {
+            $error .= '<div class="alert alert-danger">CSRF-Token ungültig.</div>';
+        } else {
+            $sid = (int)($_GET['id'] ?? 0);
+            $uid = (int)($_POST['user_id'] ?? 0);
+            if ($uid > 0) {
+                $mumble->addMember($sid, $uid);
+            }
+            header('Location: ?p=mumble_edit&id='.$sid.'&h=member_added');
+            exit;
+        }
+    }
+
+    /* --- Mitglied entfernen --- */
+    if ($p === 'mumble_edit' && $c === 'member_remove'
+        && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST')
+    {
+        if (!$mb_csrf_ok) {
+            $error .= '<div class="alert alert-danger">CSRF-Token ungültig.</div>';
+        } else {
+            $sid = (int)($_GET['id'] ?? 0);
+            $uid = (int)($_POST['user_id'] ?? 0);
+            if ($uid > 0) {
+                $mumble->removeMember($sid, $uid);
+            }
+            header('Location: ?p=mumble_edit&id='.$sid.'&h=member_removed');
+            exit;
+        }
+    }
+
+    /* --- AJAX: User-Suche (für Mitglieder-Autocomplete) --- */
+    if ($p === 'mumble_edit' && $c === 'user_search') {
+        header('Content-Type: application/json');
+        $q   = (string)($_GET['q'] ?? '');
+        $sid = (int)($_GET['id'] ?? 0);
+        if (strlen($q) < 2 || !$mumble->isOwner($sid)) {
+            echo json_encode([]);
+        } else {
+            echo json_encode($mumble->searchUsers($q));
+        }
+        exit;
+    }
+
     /* --- AJAX: Live-Stats --- */
     if ($p === 'mumble' && $c === 'stats') {
         header('Content-Type: application/json');
@@ -247,7 +366,12 @@ if (strpos((string)$p, 'mumble') === 0 && $loginsystem->login_session()) {
             $p === 'mumble_edit'  && $mb_h === 'supw_reset'     => 'SuperUser-Passwort wurde zurückgesetzt.',
             $p === 'mumble_edit'  && $mb_h === 'settings_saved' => 'Einstellungen gespeichert. Server wurde neugestartet.',
             $p === 'mumble_edit'  && $mb_h === 'widget_saved'   => 'Widget-Einstellungen gespeichert.',
+            $p === 'mumble_edit'  && $mb_h === 'member_added'   => 'Mitglied hinzugefügt.',
+            $p === 'mumble_edit'  && $mb_h === 'member_removed' => 'Mitglied entfernt.',
             $p === 'mumble_config'&& $mb_h === 'config_saved'   => 'Config gespeichert. Server wurde neugestartet.',
+            $p === 'mumble_config'&& $mb_h === 'settings_saved' => 'Einstellungen gespeichert. Server wurde neugestartet.',
+            $p === 'mumble_config'&& $mb_h === 'cert_uploaded'  => 'Zertifikat hochgeladen und aktiviert. Server wurde neugestartet.',
+            $p === 'mumble_config'&& $mb_h === 'cert_removed'   => 'Zertifikat entfernt. Server verwendet wieder ein selbst-signiertes Zertifikat.',
             $p === 'mumble_hosts' && $mb_h === 'host_saved'     => 'Host gespeichert.',
             $p === 'mumble_hosts' && $mb_h === 'host_deleted'   => 'Host gelöscht.',
             $p === 'mumble_quota' && $mb_h === 'quota_saved'    => 'Quotas gespeichert.',
@@ -261,7 +385,10 @@ if (strpos((string)$p, 'mumble') === 0 && $loginsystem->login_session()) {
 /* --- Öffentlicher Widget-Endpoint (kein Login nötig) --- */
 // Muss VOR dem Layout-HTML laufen, damit die Seite standalone ohne Sidebar gerendert wird.
 if ($p === 'mumble_widget') {
+    // X-Frame-Options entfernen damit das Widget in externen iFrames eingebettet werden kann
+    header_remove('X-Frame-Options');
+    header('X-Frame-Options: ALLOWALL');
     $mumble = new mumble();
-    include dirname(__FILE__).'/../../templates/mumble/mumble_widget.php';
+    include dirname(__FILE__).'/../templates/mumble/mumble_widget.php';
     exit;
 }

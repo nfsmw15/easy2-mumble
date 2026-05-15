@@ -50,6 +50,15 @@
         });
     }
 
+    var formCertRemove = document.getElementById('mb-form-cert-remove');
+    if (formCertRemove) {
+        formCertRemove.addEventListener('submit', function (e) {
+            if (!confirm('Zertifikat entfernen? Der Server verwendet dann wieder ein selbst-signiertes Zertifikat.')) {
+                e.preventDefault();
+            }
+        });
+    }
+
     // --- Widget Copy-Buttons ---
     function copyText(id, btnId) {
         var el = document.getElementById(id);
@@ -133,6 +142,73 @@
 
     if (viewerBox && viewerUrl) {
         loadViewer();
+    }
+
+    // --- Live-Usersuche für Mitglieder ---
+    var memberSearch  = document.getElementById('mb-member-search');
+    var memberSuggest = document.getElementById('mb-member-suggestions');
+    var memberAddBtn  = document.getElementById('mb-member-add-btn');
+    var memberUid     = document.getElementById('mb-member-uid');
+    var memberForm    = document.getElementById('mb-member-add-form');
+    var searchUrl     = memberSearch ? (memberSearch.getAttribute('data-search-url') || '') : '';
+    var searchTimer   = null;
+
+    function closeSuggestions() {
+        if (memberSuggest) {
+            memberSuggest.innerHTML = '';
+            memberSuggest.style.display = 'none';
+        }
+    }
+
+    if (memberSearch && memberSuggest && searchUrl) {
+        memberSearch.addEventListener('input', function () {
+            clearTimeout(searchTimer);
+            var q = memberSearch.value.trim();
+            if (q.length < 2) { closeSuggestions(); return; }
+            searchTimer = setTimeout(function () {
+                fetch(searchUrl + encodeURIComponent(q))
+                    .then(function (r) { return r.json(); })
+                    .then(function (users) {
+                        memberSuggest.innerHTML = '';
+                        if (!users || users.length === 0) { closeSuggestions(); return; }
+                        users.forEach(function (u) {
+                            var item = document.createElement('a');
+                            item.href = '#';
+                            item.className = 'list-group-item list-group-item-action py-1 px-2';
+                            item.textContent = u.username;
+                            item.setAttribute('data-uid', u.id);
+                            item.addEventListener('click', function (e) {
+                                e.preventDefault();
+                                memberSearch.value    = u.username;
+                                memberUid.value       = u.id;
+                                memberAddBtn.disabled = false;
+                                closeSuggestions();
+                            });
+                            memberSuggest.appendChild(item);
+                        });
+                        memberSuggest.style.display = 'block';
+                    })
+                    .catch(function () { closeSuggestions(); });
+            }, 250);
+        });
+
+        memberSearch.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { closeSuggestions(); }
+        });
+
+        document.addEventListener('click', function (e) {
+            if (!memberSearch.contains(e.target) && !memberSuggest.contains(e.target)) {
+                closeSuggestions();
+            }
+        });
+    }
+
+    if (memberAddBtn && memberForm) {
+        memberAddBtn.addEventListener('click', function () {
+            if (memberUid && memberUid.value) {
+                memberForm.submit();
+            }
+        });
     }
 
 })();

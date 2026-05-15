@@ -50,6 +50,19 @@ class mumble_agent
     public function getViewer(string $cid): array {
         return $this->request('GET', '/v1/servers/'.rawurlencode($cid).'/viewer', null, 12);
     }
+    public function getSettings(string $cid): array {
+        return $this->request('GET', '/v1/servers/'.rawurlencode($cid).'/settings');
+    }
+    public function saveSettings(string $cid, array $data): array {
+        return $this->request('PATCH', '/v1/servers/'.rawurlencode($cid), $data, 120);
+    }
+    public function setCertificate(string $cid, string $cert, string $key): array {
+        return $this->request('PUT', '/v1/servers/'.rawurlencode($cid).'/certificate',
+            ['cert' => $cert, 'key' => $key], 60);
+    }
+    public function removeCertificate(string $cid): array {
+        return $this->request('DELETE', '/v1/servers/'.rawurlencode($cid).'/certificate', null, 60);
+    }
     public function getConfig(string $cid): array {
         return $this->request('GET', '/v1/servers/'.rawurlencode($cid).'/config');
     }

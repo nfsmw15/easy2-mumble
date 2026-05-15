@@ -43,6 +43,24 @@ class mumble extends loginsystem
     public function canManageHosts(): bool  { return (bool)parent::auditRight('mumble_hosts'); }
     public function canManageQuotas(): bool { return (bool)parent::auditRight('mumble_quota'); }
 
+    public function canManageServer(int $serverId): bool
+    {
+        if ($this->canAdminAll()) return true;
+        $uid = (int)parent::getUser('id');
+        $srv = $this->getServer($serverId);
+        if (!$srv) return false;
+        if ((int)$srv['owner_user_id'] === $uid) return true;
+        return $this->isMember($serverId, $uid);
+    }
+
+    public function isOwner(int $serverId): bool
+    {
+        if ($this->canAdminAll()) return true;
+        $uid = (int)parent::getUser('id');
+        $srv = $this->getServer($serverId);
+        return $srv && (int)$srv['owner_user_id'] === $uid;
+    }
+
     public function canCreate(): bool
     {
         // Admin (mumble_admin) darf immer anlegen, unabhängig von Quota
@@ -149,9 +167,13 @@ class mumble extends loginsystem
                FROM `".Prefix."_mumble_server` s
                JOIN `".Prefix."_mumble_host`   h ON h.id = s.host_id
               WHERE s.owner_user_id = :uid
-              ORDER BY s.created_at DESC"
+                 OR s.id IN (
+                      SELECT server_id FROM `".Prefix."_mumble_server_members`
+                       WHERE user_id = :uid2
+                    )
+              ORDER BY s.owner_user_id = :uid3 DESC, s.created_at DESC"
         );
-        $stmt->execute([':uid' => $userId]);
+        $stmt->execute([':uid' => $userId, ':uid2' => $userId, ':uid3' => $userId]);
         return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 
@@ -410,7 +432,7 @@ class mumble extends loginsystem
     public function getAllRanks(): array
     {
         return $this->pdo->query(
-            "SELECT id, name FROM `".Prefix."_ranks` ORDER BY position ASC"
+            "SELECT id, title AS name FROM `".Prefix."_ranks` ORDER BY pos ASC"
         )->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 
@@ -746,5 +768,131 @@ class mumble extends loginsystem
         );
         $stmt->execute([':id' => $id]);
         return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /* ========== Server-Members ========== */
+
+    public function getMembers(int $serverId): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT m.user_id, m.added_at, u.username
+               FROM `".Prefix."_mumble_server_members` m
+               JOIN `".Prefix."_user` u ON u.id = m.user_id
+              WHERE m.server_id = :sid ORDER BY u.username"
+        );
+        $stmt->execute([':sid' => $serverId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    }
+
+    public function isMember(int $serverId, int $userId): bool
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT 1 FROM `".Prefix."_mumble_server_members`
+              WHERE server_id = :sid AND user_id = :uid LIMIT 1"
+        );
+        $stmt->execute([':sid' => $serverId, ':uid' => $userId]);
+        return (bool)$stmt->fetchColumn();
+    }
+
+    public function addMember(int $serverId, int $userId): void
+    {
+        $stmt = $this->pdo->prepare(
+            "INSERT IGNORE INTO `".Prefix."_mumble_server_members`
+             (server_id, user_id, added_at) VALUES (:sid, :uid, NOW())"
+        );
+        $stmt->execute([':sid' => $serverId, ':uid' => $userId]);
+    }
+
+    public function removeMember(int $serverId, int $userId): void
+    {
+        $stmt = $this->pdo->prepare(
+            "DELETE FROM `".Prefix."_mumble_server_members`
+              WHERE server_id = :sid AND user_id = :uid"
+        );
+        $stmt->execute([':sid' => $serverId, ':uid' => $userId]);
+    }
+
+    public function searchUsers(string $term, int $limit = 10): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT id, username FROM `".Prefix."_user`
+              WHERE username LIKE :t AND active = 1
+              ORDER BY username LIMIT :l"
+        );
+        $stmt->execute([':t' => '%'.str_replace(['%','_'],['\\%','\\_'],$term).'%', ':l' => $limit]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    }
+
+    /* ========== Server-Einstellungen (Config-Tabs) ========== */
+
+    public function getServerSettings(int $serverId): ?array
+    {
+        $srv = $this->getServer($serverId);
+        if (!$srv || !$this->canManageServer($serverId)) return null;
+        $agent = new mumble_agent($srv['agent_url'], $srv['agent_token']);
+        $res = $agent->getSettings((string)$srv['container_id']);
+        return $res['ok'] ? ($res['data']['settings'] ?? []) : [];
+    }
+
+    public function saveServerSettings(int $serverId, array $data): array
+    {
+        $srv = $this->getServer($serverId);
+        if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
+        if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
+        $uid = (int)parent::getUser('id');
+        // max_users nur Owner/Admin
+        if (isset($data['max_users']) && !$this->isOwner($serverId)) {
+            unset($data['max_users']);
+        }
+        $agent = new mumble_agent($srv['agent_url'], $srv['agent_token']);
+        $res = $agent->saveSettings((string)$srv['container_id'], $data);
+        if ($res['ok'] && !empty($res['data']['container_id'])) {
+            $this->updateContainerId($serverId, (string)$res['data']['container_id']);
+        }
+        $this->log($serverId, $uid, 'config_update', $res['ok'] ? 'ok' : ($res['error'] ?? ''), (bool)$res['ok']);
+        return $res;
+    }
+
+    /* ========== Zertifikat ========== */
+
+    public function setCertificate(int $serverId, string $cert, string $key): array
+    {
+        $srv = $this->getServer($serverId);
+        if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
+        if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
+        $uid = (int)parent::getUser('id');
+        $agent = new mumble_agent($srv['agent_url'], $srv['agent_token']);
+        $res = $agent->setCertificate((string)$srv['container_id'], $cert, $key);
+        if ($res['ok'] && !empty($res['data']['container_id'])) {
+            $this->updateContainerId($serverId, (string)$res['data']['container_id']);
+        }
+        $this->log($serverId, $uid, 'cert_upload', $res['ok'] ? 'ok' : ($res['error'] ?? ''), (bool)$res['ok']);
+        return $res;
+    }
+
+    public function removeCertificate(int $serverId): array
+    {
+        $srv = $this->getServer($serverId);
+        if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
+        if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
+        $uid = (int)parent::getUser('id');
+        $agent = new mumble_agent($srv['agent_url'], $srv['agent_token']);
+        $res = $agent->removeCertificate((string)$srv['container_id']);
+        if ($res['ok'] && !empty($res['data']['container_id'])) {
+            $this->updateContainerId($serverId, (string)$res['data']['container_id']);
+        }
+        $this->log($serverId, $uid, 'cert_remove', $res['ok'] ? 'ok' : ($res['error'] ?? ''), (bool)$res['ok']);
+        return $res;
+    }
+
+    private function updateContainerId(int $serverId, string $newCid): void
+    {
+        try {
+            $stmt = $this->pdo->prepare(
+                "UPDATE `".Prefix."_mumble_server`
+                    SET container_id = :c, updated_at = NOW() WHERE id = :id"
+            );
+            $stmt->execute([':c' => $newCid, ':id' => $serverId]);
+        } catch (\Throwable) {}
     }
 }
