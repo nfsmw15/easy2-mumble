@@ -5,7 +5,7 @@ RUN apt-get update -qq && apt-get install -y -qq \
         libpng-dev libjpeg-dev libfreetype6-dev \
         default-mysql-client curl unzip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) pdo pdo_mysql gd \
+    && docker-php-ext-install -j$(nproc) pdo pdo_mysql mysqli gd \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Apache konfigurieren
