@@ -34,12 +34,14 @@ if [[ ! -f "$INIT_MARKER" ]]; then
     echo "[entrypoint] Erstinstallation wird durchgeführt..."
 
     # Easy2 Basistabellen anlegen
+    # Easy2 SQL nutzt [prefix]_ml_* → kurzes Prefix einsetzen (z.B. "ml")
     for sql in /docker-init/easy2-sql/*.sql; do
         echo "  → $(basename $sql)"
-        sed "s/\[prefix\]/${DB_PREFIX}_ml/g" "$sql" | mysql_cmd 2>/dev/null || true
+        sed "s/\[prefix\]/${DB_PREFIX}/g" "$sql" | mysql_cmd 2>/dev/null || true
     done
 
     # easy2-mumble Tabellen anlegen
+    # install.sql nutzt [prefix]_* → volles Prefix einsetzen (z.B. "ml_ml")
     echo "  → easy2-mumble install.sql"
     sed "s/\[prefix\]/${DB_PREFIX}_ml/g" /docker-init/sql/install.sql | mysql_cmd
 
@@ -106,7 +108,7 @@ for mig in /docker-init/sql/migrate_v*.sql; do
     marker="$WEBROOT/system/.migrated_$(basename "$mig" .sql)"
     if [[ ! -f "$marker" ]]; then
         echo "[entrypoint] Migration: $(basename "$mig")"
-        sed "s/\[prefix\]/${DB_PREFIX}_ml/g" "$mig" | mysql_cmd
+        sed "s/\[prefix\]/${DB_PREFIX}_ml/g" "$mig" | mysql_cmd  # volles Prefix
         touch "$marker"
     fi
 done
