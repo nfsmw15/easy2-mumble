@@ -3,7 +3,7 @@ FROM php:8.2-apache
 # PHP-Erweiterungen
 RUN apt-get update -qq && apt-get install -y -qq \
         libpng-dev libjpeg-dev libfreetype6-dev \
-        default-mysql-client git curl unzip \
+        default-mysql-client curl unzip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) pdo pdo_mysql gd \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -15,12 +15,14 @@ RUN a2enmod rewrite
 # init-Verzeichnisse anlegen
 RUN mkdir -p /docker-init/easy2-sql /docker-init/sql /docker-init/snippets
 
-# Easy2-PHP8 (main-dashboard) in temp klonen, dann nach /var/www/html verschieben
-RUN rm -rf /var/www/html \
-    && git clone --depth=1 --branch main-dashboard \
-       https://github.com/nfsmw15/Easy2-PHP8.git /var/www/html \
+# Easy2-PHP8 (main-dashboard) als ZIP laden und entpacken
+RUN curl -fsSL https://github.com/nfsmw15/Easy2-PHP8/archive/refs/heads/main-dashboard.zip \
+        -o /tmp/easy2.zip \
+    && unzip -q /tmp/easy2.zip -d /tmp/ \
+    && rm -rf /var/www/html \
+    && mv /tmp/Easy2-PHP8-main-dashboard /var/www/html \
     && cp -r /var/www/html/install/sql/. /docker-init/easy2-sql/ \
-    && rm -rf /var/www/html/.git
+    && rm -f /tmp/easy2.zip
 
 WORKDIR /var/www/html
 
