@@ -89,15 +89,13 @@ SQL
     php -r "
 \$pdo = new PDO('mysql:host=${DB_HOST};port=${DB_PORT};dbname=${DB_NAME};charset=utf8mb4',
                 '${DB_USER}', '${DB_PASS}');
-\$hash = password_hash('${ADMIN_PASS}', PASSWORD_BCRYPT);
-\$rankStmt = \$pdo->query('SELECT id FROM \`${CMS_PREFIX}_ranks\` WHERE special=\"bold\" LIMIT 1');
-\$rank = \$rankStmt->fetchColumn();
+\$hash = password_hash('${ADMIN_PASS}', PASSWORD_BCRYPT, ['cost' => 13]);
 \$exists = \$pdo->query('SELECT COUNT(*) FROM \`${CMS_PREFIX}_user\` WHERE username=\"${ADMIN_USER}\"')->fetchColumn();
 if (!\$exists) {
     \$uik  = bin2hex(random_bytes(16));
     \$stmt = \$pdo->prepare('INSERT INTO \`${CMS_PREFIX}_user\`
-        (username, password, email, active, rank, uik, regdate) VALUES (?,?,?,1,?,?,?)');
-    \$stmt->execute(['${ADMIN_USER}', \$hash, '${ADMIN_EMAIL}', \$rank, \$uik, date('Y-m-d H:i:s')]);
+        (username, password, email, active, rank, uik, regdate, avatar) VALUES (?,?,?,1,1813201541,?,?,\"\")');
+    \$stmt->execute(['${ADMIN_USER}', \$hash, '${ADMIN_EMAIL}', \$uik, time()]);
     echo \"[entrypoint] Admin-User angelegt.\n\";
 } else {
     echo \"[entrypoint] Admin-User existiert bereits.\n\";
