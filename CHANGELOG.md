@@ -2,6 +2,45 @@
 
 Alle nennenswerten Änderungen an diesem Projekt werden hier dokumentiert.
 
+## [v0.4.0] — 2026-05-15
+
+### Hinzugefügt
+- **Konfigurationsformular** — 4-Tab-Formular (Basis, Registrierung, Auto-Ban, Erweitert) ersetzt den raw INI-Editor
+  - Basis: Bandbreite, Timeout, Opus-Schwellwert, Textnachrichten-Limits, HTML, Channel-Einstellungen
+  - Registrierung: öffentliche Mumble-Serverliste komplett konfigurierbar
+  - Auto-Ban: Brute-Force-Schutz (Versuche, Zeitfenster, Bann-Dauer)
+  - Erweitert: suggestVersion/Positional/PushToTalk, Bonjour, Serverversion senden
+  - Standard-Channel als Dropdown mit Channel-Namen (aus Channel-Viewer)
+- **TLS-Zertifikat-Upload** — PEM-Zertifikat und Schlüssel per Web-UI hochladen oder entfernen
+- **Server-Mitglieder** — Benutzer einem Server zuweisen mit eingeschränkten Rechten (kein Löschen, kein max_users-Ändern)
+  - Live-Autocomplete-Suche beim Hinzufügen
+  - Mitglieder sehen zugewiesene Server in der Übersicht
+- **Channel-Viewer Verbesserungen**
+  - Korrekte User-Platzierung via Docker-Log-Parsing (Move-Events, Temp-Channel-Erkennung)
+  - Temporäre Channels (nicht in SQLite) aus `Added channel`-Logs
+  - Beim Erstellen eines Temp-Channels implizit eintreten (kein separater Move geloggt)
+- **Widget**: X-Frame-Options entfernt für externe iFrame-Einbettung
+- `system/js/mumble-edit.js` — alle Interaktionen als externe JS-Datei (CSP-konform)
+- DB-Migration `migrate_v0.4.0.sql`: Tabelle `mumble_server_members`, Spalten `ssl_cert_path`/`ssl_key_path`
+
+### Geändert
+- Online-Zählung in Server-Übersicht via Log-Parsing statt TCP-Verbindungszählung (externe Scanner werden ignoriert)
+- `mumble_edit.php`: Zugriffsprüfung auf `canManageServer()` — Mitglieder können Details öffnen
+
+### Behoben
+- `getAllRanks()`: Spalten `title`/`pos` statt `name`/`position` (Quota-Seite war leer)
+- Widget-Include-Pfad: `/../templates/` statt `/../../templates/`
+- DB-Migration: korrekter Tabellenpräfix `[prefix]_mumble_*` statt `[prefix]_ml_mumble_*`
+
+## [v0.3.0] — 2026-05-08
+
+### Hinzugefügt
+- **Channel-Viewer** — zeigt Channel-Struktur und Online-User ohne Mumble-Client-Verbindung (SQLite + Docker-Log-Parsing)
+- **Einbettbares Widget** (`?p=mumble_widget`) — standalone ohne CMS-Layout, Token- oder öffentlicher Zugriff, konfigurierbarer Auto-Refresh
+- Server-Name als klickbarer `mumble://`-Link im Widget und Channel-Viewer
+- Widget-Einstellungen: Modus (öffentlich/Token/deaktiviert), Refresh-Intervall, Token-Regenerierung
+- AJAX-Endpoints: `viewer_data`, `widget_save`, `widget_regen`
+
 ## [v0.2.0] — 2026-05-03
 
 ### Hinzugefügt
