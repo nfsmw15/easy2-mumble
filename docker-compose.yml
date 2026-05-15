@@ -10,6 +10,7 @@ services:
       DB_USER: easy2
       DB_PASS: changeme          # bitte ändern
       DB_PREFIX: ml
+      DB_ROOT_PASS: rootchangeme  # muss mit MARIADB_ROOT_PASSWORD übereinstimmen
       ADMIN_USER: admin
       ADMIN_PASS: changeme       # bitte ändern
       ADMIN_EMAIL: admin@example.com
