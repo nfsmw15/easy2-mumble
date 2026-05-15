@@ -4,6 +4,7 @@ set -euo pipefail
 # ── Konfiguration aus Umgebungsvariablen ────────────────────────────────────
 DB_HOST="${DB_HOST:-db}"
 DB_PORT="${DB_PORT:-3306}"
+MYSQL_OPTS=(-h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME")
 DB_NAME="${DB_NAME:-easy2mumble}"
 DB_USER="${DB_USER:-easy2}"
 DB_PASS="${DB_PASS:-changeme}"
@@ -20,7 +21,7 @@ INIT_MARKER="$WEBROOT/system/.installed"
 
 # ── Warten auf MariaDB ───────────────────────────────────────────────────────
 echo "[entrypoint] Warte auf MariaDB ($DB_HOST:$DB_PORT)..."
-until mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT 1" &>/dev/null; do
+until mysqladmin ping -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --silent &>/dev/null; do
     sleep 2
 done
 echo "[entrypoint] MariaDB erreichbar."
