@@ -7,7 +7,6 @@ DB_PORT="${DB_PORT:-3306}"
 DB_NAME="${DB_NAME:-easy2mumble}"
 DB_USER="${DB_USER:-easy2}"
 DB_PASS="${DB_PASS:-changeme}"
-DB_ROOT_PASS="${DB_ROOT_PASS:-rootchangeme}"
 DB_PREFIX="${DB_PREFIX:-ml}"
 ADMIN_USER="${ADMIN_USER:-admin}"
 ADMIN_PASS="${ADMIN_PASS:-changeme}"
@@ -19,13 +18,13 @@ WEBROOT=/var/www/html
 CONFIG="$WEBROOT/system/config.inc.php"
 INIT_MARKER="$WEBROOT/system/.installed"
 
-# Root-User für Setup, App-User für config.inc.php
-root_cmd() { mysql -h"$DB_HOST" -P"$DB_PORT" -uroot -p"$DB_ROOT_PASS" "$DB_NAME" "$@"; }
-mysql_cmd() { mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS"   "$DB_NAME" "$@"; }
+mysql_cmd() { mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" "$@"; }
 
-# ── Warten auf MariaDB ───────────────────────────────────────────────────────
+# ── Warten bis der App-User verbinden kann ───────────────────────────────────
+# Wir warten nicht nur auf den Ping, sondern auf eine echte Verbindung mit dem
+# App-User — dadurch ist sicher dass MariaDB die Benutzer-Grants fertig hat.
 echo "[entrypoint] Warte auf MariaDB ($DB_HOST:$DB_PORT)..."
-until mysqladmin ping -h"$DB_HOST" -P"$DB_PORT" -uroot -p"$DB_ROOT_PASS" --silent 2>/dev/null; do
+until mysql_cmd -e "SELECT 1" &>/dev/null; do
     sleep 2
 done
 echo "[entrypoint] MariaDB erreichbar."
@@ -34,15 +33,15 @@ echo "[entrypoint] MariaDB erreichbar."
 if [[ ! -f "$INIT_MARKER" ]]; then
     echo "[entrypoint] Erstinstallation wird durchgeführt..."
 
-    # Easy2 Basistabellen anlegen (mit root)
+    # Easy2 Basistabellen anlegen
     for sql in /docker-init/easy2-sql/*.sql; do
         echo "  → $(basename $sql)"
-        sed "s/\[prefix\]/${DB_PREFIX}_ml/g" "$sql" | root_cmd 2>/dev/null || true
+        sed "s/\[prefix\]/${DB_PREFIX}_ml/g" "$sql" | mysql_cmd 2>/dev/null || true
     done
 
     # easy2-mumble Tabellen anlegen
     echo "  → easy2-mumble install.sql"
-    sed "s/\[prefix\]/${DB_PREFIX}_ml/g" /docker-init/sql/install.sql | root_cmd
+    sed "s/\[prefix\]/${DB_PREFIX}_ml/g" /docker-init/sql/install.sql | mysql_cmd
 
     # config.inc.php schreiben
     cat > "$CONFIG" << PHPEOF
@@ -71,7 +70,7 @@ PHPEOF
     # Admin-User anlegen
     PASS_HASH=$(php -r "echo password_hash('${ADMIN_PASS}', PASSWORD_BCRYPT);")
 
-    root_cmd << SQL
+    mysql_cmd << SQL
 INSERT IGNORE INTO \`${DB_PREFIX}_ml_main\` (name, value) VALUES
   ('site_title',       '${SITE_TITLE}'),
   ('short_site_title', '${SITE_TITLE_SHORT}'),
@@ -107,7 +106,7 @@ for mig in /docker-init/sql/migrate_v*.sql; do
     marker="$WEBROOT/system/.migrated_$(basename "$mig" .sql)"
     if [[ ! -f "$marker" ]]; then
         echo "[entrypoint] Migration: $(basename "$mig")"
-        sed "s/\[prefix\]/${DB_PREFIX}_ml/g" "$mig" | root_cmd
+        sed "s/\[prefix\]/${DB_PREFIX}_ml/g" "$mig" | mysql_cmd
         touch "$marker"
     fi
 done
