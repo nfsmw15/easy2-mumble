@@ -79,21 +79,30 @@ try {
 PHPEOF
 
     # Admin-User anlegen und Site-Titel setzen
-    PASS_HASH=$(php -r "echo password_hash('${ADMIN_PASS}', PASSWORD_BCRYPT);")
-
+    # Passwort-Hash und DB-Insert über PHP (vermeidet $-Escaping-Probleme in Bash)
     mysql_cmd << SQL
 UPDATE \`${CMS_PREFIX}_main\` SET value='${SITE_TITLE}'       WHERE tag='site_title';
 UPDATE \`${CMS_PREFIX}_main\` SET value='${SITE_TITLE_SHORT}' WHERE tag='short_site_title';
 UPDATE \`${CMS_PREFIX}_main\` SET value='0'                   WHERE tag='regist_active';
-
-INSERT IGNORE INTO \`${CMS_PREFIX}_user\`
-  (username, password, email, active, rank)
-SELECT '${ADMIN_USER}', '${PASS_HASH}', '${ADMIN_EMAIL}', 1,
-       (SELECT id FROM \`${CMS_PREFIX}_ranks\` WHERE special='bold' LIMIT 1)
-WHERE NOT EXISTS (
-  SELECT 1 FROM \`${CMS_PREFIX}_user\` WHERE username='${ADMIN_USER}'
-);
 SQL
+
+    php -r "
+\$pdo = new PDO('mysql:host=${DB_HOST};port=${DB_PORT};dbname=${DB_NAME};charset=utf8mb4',
+                '${DB_USER}', '${DB_PASS}');
+\$hash = password_hash('${ADMIN_PASS}', PASSWORD_BCRYPT);
+\$rankStmt = \$pdo->query('SELECT id FROM \`${CMS_PREFIX}_ranks\` WHERE special=\"bold\" LIMIT 1');
+\$rank = \$rankStmt->fetchColumn();
+\$exists = \$pdo->query('SELECT COUNT(*) FROM \`${CMS_PREFIX}_user\` WHERE username=\"${ADMIN_USER}\"')->fetchColumn();
+if (!\$exists) {
+    \$uik  = bin2hex(random_bytes(16));
+    \$stmt = \$pdo->prepare('INSERT INTO \`${CMS_PREFIX}_user\`
+        (username, password, email, active, rank, uik, regdate) VALUES (?,?,?,1,?,?,?)');
+    \$stmt->execute(['${ADMIN_USER}', \$hash, '${ADMIN_EMAIL}', \$rank, \$uik, date('Y-m-d H:i:s')]);
+    echo \"[entrypoint] Admin-User angelegt.\n\";
+} else {
+    echo \"[entrypoint] Admin-User existiert bereits.\n\";
+}
+"
 
     # install/-Ordner entfernen (Sicherheit)
     rm -rf "$WEBROOT/install"
