@@ -163,6 +163,24 @@ Snippet-Blöcke aus den `.user.php` Dateien manuell entfernen (die "Easy2-Mumble
 
 Auf den Mumble-Hosts: siehe [mumble-agent README](https://github.com/nfsmw15/mumble-agent).
 
+## Update von einer älteren Version
+
+Jede `sql/migrate_vX.Y.Z.sql` muss einmalig eingespielt werden:
+
+```bash
+sed 's/\[prefix\]/easy/g' sql/migrate_v0.4.0.sql | mysql -u <user> -p <db>
+```
+
+`migrate_v0.4.0.sql` ergänzt:
+- Tabelle `*_mumble_server_members` (Mitglieder-Zuweisung)
+- Spalten `ssl_cert_path`, `ssl_key_path` in `*_mumble_host`
+
+Außerdem `system/js/mumble-edit.js` kopieren (neu in v0.4.0):
+
+```bash
+cp system/js/mumble-edit.js /var/www/easy/system/js/
+```
+
 ## Fehlersuche
 
 | Symptom | Ursache |
