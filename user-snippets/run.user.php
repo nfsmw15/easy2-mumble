@@ -259,7 +259,9 @@ if (strpos((string)$p, 'mumble') === 0 && $loginsystem->login_session()) {
 }
 
 /* --- Öffentlicher Widget-Endpoint (kein Login nötig) --- */
+// Muss VOR dem Layout-HTML laufen, damit die Seite standalone ohne Sidebar gerendert wird.
 if ($p === 'mumble_widget') {
-    // Wird direkt vom Template mumble_widget.php gerendert — kein Login-Check hier.
-    // Der Template-Zugriff wird über token/widget_public in der DB kontrolliert.
+    $mumble = new mumble();
+    include dirname(__FILE__).'/../../templates/mumble/mumble_widget.php';
+    exit;
 }
