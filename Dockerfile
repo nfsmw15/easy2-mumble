@@ -12,13 +12,17 @@ RUN apt-get update -qq && apt-get install -y -qq \
 COPY docker/apache.conf /etc/apache2/sites-available/000-default.conf
 RUN a2enmod rewrite
 
-WORKDIR /var/www/html
+# init-Verzeichnisse anlegen
+RUN mkdir -p /docker-init/easy2-sql /docker-init/sql /docker-init/snippets
 
-# Easy2-PHP8 (main-dashboard) klonen
-RUN git clone --depth=1 --branch main-dashboard \
-    https://github.com/nfsmw15/Easy2-PHP8.git /var/www/html \
-    && cp -r /var/www/html/install/sql /docker-init/easy2-sql \
+# Easy2-PHP8 (main-dashboard) in temp klonen, dann nach /var/www/html verschieben
+RUN rm -rf /var/www/html \
+    && git clone --depth=1 --branch main-dashboard \
+       https://github.com/nfsmw15/Easy2-PHP8.git /var/www/html \
+    && cp -r /var/www/html/install/sql/. /docker-init/easy2-sql/ \
     && rm -rf /var/www/html/.git
+
+WORKDIR /var/www/html
 
 # easy2-mumble Dateien einspielen
 COPY system/classes/mumble.php       system/classes/mumble.php
@@ -26,9 +30,6 @@ COPY system/classes/mumble_agent.php system/classes/mumble_agent.php
 COPY system/js/mumble-edit.js        system/js/mumble-edit.js
 COPY templates/mumble/               templates/mumble/
 COPY sql/                            /docker-init/sql/
-RUN mkdir -p /docker-init/easy2-sql
-
-# Snippets für classes.run.user.php und run.user.php
 COPY user-snippets/                  /docker-init/snippets/
 
 # Entrypoint
