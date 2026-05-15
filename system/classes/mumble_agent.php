@@ -47,6 +47,9 @@ class mumble_agent
         return $this->request('POST', '/v1/servers/'.rawurlencode($cid).'/superuser/reset',
             ['password' => $pw], 30);
     }
+    public function getViewer(string $cid): array {
+        return $this->request('GET', '/v1/servers/'.rawurlencode($cid).'/viewer', null, 12);
+    }
     public function getConfig(string $cid): array {
         return $this->request('GET', '/v1/servers/'.rawurlencode($cid).'/config');
     }
@@ -90,7 +93,7 @@ class mumble_agent
         $raw  = curl_exec($ch);
         $http = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $err  = curl_error($ch);
-        curl_close($ch);
+        unset($ch); // curl_close() ist ab PHP 8.4 deprecated; Handle wird automatisch freigegeben
 
         if ($raw === false) {
             return ['ok' => false, 'data' => null, 'error' => $err, 'http' => 0];

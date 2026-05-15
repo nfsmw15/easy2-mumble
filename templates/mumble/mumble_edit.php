@@ -54,6 +54,16 @@ $mb_cls = match ($mb_status) {
 
 // SuperUser-PW laden (best effort)
 $mb_supw = $mumble->getSuperUserPassword($mb_sid);
+
+// Widget-Einstellungen
+$mb_widget = $mumble->getWidgetSettings($mb_sid);
+$mb_widget_token   = (string)($mb_widget['widget_token'] ?? '');
+$mb_widget_public  = (bool)($mb_widget['widget_public'] ?? false);
+$mb_widget_refresh = (int)($mb_widget['widget_refresh'] ?? 30);
+$mb_widget_url     = rtrim((string)($_SERVER['REQUEST_SCHEME'] ?? 'https').'://'.(string)($_SERVER['HTTP_HOST'] ?? ''), '/');
+$mb_widget_iframe  = $mb_widget_token !== ''
+    ? $mb_widget_url.'/?p=mumble_widget&token='.$mb_widget_token
+    : ($mb_widget_public ? $mb_widget_url.'/?p=mumble_widget&id='.$mb_sid : '');
 ?>
 <div class="content-wrapper">
 <div class="container full-container">
@@ -168,6 +178,26 @@ $mb_supw = $mumble->getSuperUserPassword($mb_sid);
             <?php } ?>
         </div>
 
+        <!-- Channel-Viewer -->
+        <div class="col-md-12 mb-4">
+            <div class="card">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <span><i class="fa fa-sitemap"></i> Channel-Viewer</span>
+                    <button class="btn btn-sm btn-outline-secondary" id="mb-viewer-refresh" title="Aktualisieren">
+                        <i class="fa fa-refresh"></i>
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div id="mb-viewer-content" style="min-height:60px;"
+                         data-refresh="<?php echo $mb_widget_refresh; ?>">
+                        <div class="p-3 text-muted text-center small">
+                            <i class="fa fa-spinner fa-spin"></i> Lade…
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Rechte Spalte: Aktionen + Einstellungen bearbeiten -->
         <div class="col-md-5">
             <div class="card mb-4">
@@ -259,9 +289,67 @@ $mb_supw = $mumble->getSuperUserPassword($mb_sid);
                     </form>
                 </div>
             </div>
+
+            <!-- Widget-Einstellungen -->
+            <div class="card mb-4">
+                <div class="card-header"><i class="fa fa-code"></i> Einbettbares Widget</div>
+                <div class="card-body">
+                    <form method="post" action="?p=mumble_edit&id=<?php echo (int)$mb_srv['id']; ?>&c=widget_save">
+                        <input type="hidden" name="csrf" value="<?php echo $mb_csrf; ?>">
+                        <div class="form-group">
+                            <label class="mb-1">Sichtbarkeit</label>
+                            <select name="widget_mode" class="form-control form-control-sm" id="mb-widget-mode">
+                                <option value="disabled" <?php echo $mb_widget_token === '' && !$mb_widget_public ? 'selected' : ''; ?>>Deaktiviert</option>
+                                <option value="token"    <?php echo $mb_widget_token !== '' && !$mb_widget_public ? 'selected' : ''; ?>>Token-geschützt (empfohlen)</option>
+                                <option value="public"   <?php echo $mb_widget_public ? 'selected' : ''; ?>>Öffentlich (nur Server-ID)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="mb-1">Auto-Refresh (Sekunden, 0 = aus)</label>
+                            <input type="number" name="widget_refresh" class="form-control form-control-sm"
+                                   min="0" max="300" value="<?php echo $mb_widget_refresh; ?>">
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-primary btn-block">
+                            <i class="fa fa-save"></i> Speichern
+                        </button>
+                    </form>
+
+                    <?php if ($mb_widget_iframe !== ''): ?>
+                    <hr>
+                    <label class="small mb-1"><i class="fa fa-link"></i> Widget-URL / iframe-Code</label>
+                    <div class="input-group input-group-sm mb-2">
+                        <input type="text" class="form-control form-control-sm" id="mb-widget-url"
+                               readonly value="<?php echo htmlspecialchars($mb_widget_iframe); ?>">
+                        <div class="input-group-append">
+                            <button class="btn btn-outline-secondary btn-sm" id="mb-widget-copy-url" title="URL kopieren">
+                                <i class="fa fa-clipboard"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <textarea class="form-control form-control-sm mb-2" id="mb-widget-code" readonly rows="3"
+                    ><?php echo htmlspecialchars('<iframe src="'.$mb_widget_iframe.'" width="300" height="400" frameborder="0" scrolling="auto" style="border-radius:8px;border:none;"></iframe>'); ?></textarea>
+                    <button class="btn btn-sm btn-outline-secondary btn-block" id="mb-widget-copy-code">
+                        <i class="fa fa-clipboard"></i> iframe-Code kopieren
+                    </button>
+                    <?php if ($mb_widget_token !== '' && !$mb_widget_public): ?>
+                    <form method="post" action="?p=mumble_edit&id=<?php echo (int)$mb_srv['id']; ?>&c=widget_regen" class="mt-2">
+                        <input type="hidden" name="csrf" value="<?php echo $mb_csrf; ?>">
+                        <button type="submit" class="btn btn-sm btn-outline-warning btn-block"
+                                onclick="return confirm('Token wirklich neu generieren? Bestehende Einbettungen werden ungültig.')">
+                            <i class="fa fa-refresh"></i> Token neu generieren
+                        </button>
+                    </form>
+                    <?php endif; ?>
+                    <?php endif; ?>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 </div>
 
+<script>
+var MB_VIEWER_URL = '?p=mumble_edit&id=<?php echo (int)$mb_srv['id']; ?>&c=viewer_data';
+var MB_SERVER_ID  = <?php echo (int)$mb_srv['id']; ?>;
+</script>
 <script src="system/js/mumble-edit.js"></script>

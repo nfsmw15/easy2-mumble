@@ -673,4 +673,78 @@ class mumble extends loginsystem
             $res['ok'] ? 'ok' : (string)($res['error'] ?? 'unknown'), (bool)$res['ok']);
         return $res;
     }
+
+    /* ========== Channel-Viewer ========== */
+
+    public function getViewer(int $serverId): ?array
+    {
+        $srv = $this->getServer($serverId);
+        if (!$srv) return null;
+        $agent = new mumble_agent($srv['agent_url'], $srv['agent_token']);
+        $res = $agent->getViewer((string)$srv['container_id']);
+        return $res['ok'] ? $res['data'] : null;
+    }
+
+    public function getWidgetSettings(int $serverId): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT id, name, widget_token, widget_public, widget_refresh
+               FROM `".Prefix."_mumble_server` WHERE id = :id LIMIT 1"
+        );
+        $stmt->execute([':id' => $serverId]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+
+    public function saveWidgetSettings(int $serverId, bool $public, int $refresh): void
+    {
+        $stmt = $this->pdo->prepare(
+            "UPDATE `".Prefix."_mumble_server`
+                SET widget_public = :p, widget_refresh = :r, updated_at = NOW()
+              WHERE id = :id"
+        );
+        $stmt->execute([':p' => $public ? 1 : 0, ':r' => max(0, $refresh), ':id' => $serverId]);
+    }
+
+    public function generateWidgetToken(int $serverId): string
+    {
+        $token = bin2hex(random_bytes(24));
+        $stmt = $this->pdo->prepare(
+            "UPDATE `".Prefix."_mumble_server` SET widget_token = :t WHERE id = :id"
+        );
+        $stmt->execute([':t' => $token, ':id' => $serverId]);
+        return $token;
+    }
+
+    public function disableWidget(int $serverId): void
+    {
+        $stmt = $this->pdo->prepare(
+            "UPDATE `".Prefix."_mumble_server` SET widget_token = NULL WHERE id = :id"
+        );
+        $stmt->execute([':id' => $serverId]);
+    }
+
+    public function getServerByWidget(string $token): ?array
+    {
+        if ($token === '') return null;
+        $stmt = $this->pdo->prepare(
+            "SELECT s.*, h.agent_url, h.agent_token, h.hostname
+               FROM `".Prefix."_mumble_server` s
+               JOIN `".Prefix."_mumble_host` h ON h.id = s.host_id
+              WHERE s.widget_token = :t AND s.status = 'running' LIMIT 1"
+        );
+        $stmt->execute([':t' => $token]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+
+    public function getPublicServer(int $id): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT s.*, h.agent_url, h.agent_token, h.hostname
+               FROM `".Prefix."_mumble_server` s
+               JOIN `".Prefix."_mumble_host` h ON h.id = s.host_id
+              WHERE s.id = :id AND s.widget_public = 1 AND s.status = 'running' LIMIT 1"
+        );
+        $stmt->execute([':id' => $id]);
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
 }

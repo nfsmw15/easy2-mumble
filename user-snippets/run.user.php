@@ -196,6 +196,48 @@ if (strpos((string)$p, 'mumble') === 0 && $loginsystem->login_session()) {
         exit;
     }
 
+    /* --- AJAX: Channel-Viewer-Daten --- */
+    if ($p === 'mumble_edit' && $c === 'viewer_data') {
+        header('Content-Type: application/json');
+        $sid = (int)($_GET['id'] ?? 0);
+        $data = $mumble->getViewer($sid);
+        echo json_encode($data ?? ['ok' => false, 'error' => 'unavailable']);
+        exit;
+    }
+
+    /* --- Widget-Einstellungen speichern --- */
+    if ($p === 'mumble_edit' && $c === 'widget_save'
+        && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST')
+    {
+        if (!$mb_csrf_ok) {
+            $error .= '<div class="alert alert-danger">CSRF-Token ungültig.</div>';
+        } else {
+            $sid     = (int)($_GET['id'] ?? 0);
+            $mode    = (string)($_POST['widget_mode'] ?? 'disabled');
+            $refresh = max(0, min(300, (int)($_POST['widget_refresh'] ?? 30)));
+            $mumble->saveWidgetSettings($sid, $mode === 'public', $refresh);
+            if ($mode === 'token') {
+                $mumble->generateWidgetToken($sid);
+            } elseif ($mode === 'disabled') {
+                $mumble->disableWidget($sid);
+            }
+            header('Location: ?p=mumble_edit&id='.$sid.'&h=widget_saved');
+            exit;
+        }
+    }
+
+    /* --- Widget-Token neu generieren --- */
+    if ($p === 'mumble_edit' && $c === 'widget_regen'
+        && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST')
+    {
+        if ($mb_csrf_ok) {
+            $sid = (int)($_GET['id'] ?? 0);
+            $mumble->generateWidgetToken($sid);
+        }
+        header('Location: ?p=mumble_edit&id='.(int)($_GET['id'] ?? 0).'&h=widget_saved');
+        exit;
+    }
+
     /* --- GET-Erfolgsmeldungen nach Redirect --- */
     $mb_h = (string)($_GET['h'] ?? '');
     if ($mb_h !== '' && empty($success)) {
@@ -204,6 +246,7 @@ if (strpos((string)$p, 'mumble') === 0 && $loginsystem->login_session()) {
             $p === 'mumble'       && $mb_h === 'action_ok'      => 'Aktion erfolgreich ausgeführt.',
             $p === 'mumble_edit'  && $mb_h === 'supw_reset'     => 'SuperUser-Passwort wurde zurückgesetzt.',
             $p === 'mumble_edit'  && $mb_h === 'settings_saved' => 'Einstellungen gespeichert. Server wurde neugestartet.',
+            $p === 'mumble_edit'  && $mb_h === 'widget_saved'   => 'Widget-Einstellungen gespeichert.',
             $p === 'mumble_config'&& $mb_h === 'config_saved'   => 'Config gespeichert. Server wurde neugestartet.',
             $p === 'mumble_hosts' && $mb_h === 'host_saved'     => 'Host gespeichert.',
             $p === 'mumble_hosts' && $mb_h === 'host_deleted'   => 'Host gelöscht.',
@@ -213,4 +256,10 @@ if (strpos((string)$p, 'mumble') === 0 && $loginsystem->login_session()) {
     }
 
     unset($mb_csrf_ok, $mb_h);
+}
+
+/* --- Öffentlicher Widget-Endpoint (kein Login nötig) --- */
+if ($p === 'mumble_widget') {
+    // Wird direkt vom Template mumble_widget.php gerendert — kein Login-Check hier.
+    // Der Template-Zugriff wird über token/widget_public in der DB kontrolliert.
 }
