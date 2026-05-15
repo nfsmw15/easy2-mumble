@@ -17,7 +17,7 @@ services:
       SITE_TITLE_SHORT: "Mumble"
     volumes:
       - web_avatare:/var/www/html/avatare
-      - web_config:/var/www/html/system/config
+      - web_data:/var/easy2-data
     depends_on:
       db:
         condition: service_healthy
@@ -42,4 +42,4 @@ services:
 volumes:
   db_data:
   web_avatare:
-  web_config:
+  web_data:

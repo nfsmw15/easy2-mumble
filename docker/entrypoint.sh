@@ -16,8 +16,9 @@ SITE_TITLE="${SITE_TITLE:-Mumble WebUI}"
 SITE_TITLE_SHORT="${SITE_TITLE_SHORT:-Mumble}"
 
 WEBROOT=/var/www/html
+PERSIST=/var/easy2-data            # persistentes Volume
 CONFIG="$WEBROOT/system/config.inc.php"
-INIT_MARKER="$WEBROOT/system/.installed"
+INIT_MARKER="$PERSIST/.installed"
 
 mysql_cmd() { mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" "$@"; }
 
@@ -27,6 +28,16 @@ until mysql_cmd -e "SELECT 1" &>/dev/null; do
     sleep 2
 done
 echo "[entrypoint] MariaDB erreichbar."
+
+# ── Persistenz-Verzeichnis sicherstellen ─────────────────────────────────────
+mkdir -p "$PERSIST"
+
+# ENCRYPT_KEY persistent generieren (einmalig, nie mehr ändern)
+KEY_FILE="$PERSIST/.encrypt_key"
+if [[ ! -f "$KEY_FILE" ]]; then
+    openssl rand -hex 32 > "$KEY_FILE"
+fi
+ENCRYPT_KEY=$(cat "$KEY_FILE")
 
 # ── Erstinstallation ─────────────────────────────────────────────────────────
 if [[ ! -f "$INIT_MARKER" ]]; then
@@ -51,7 +62,9 @@ if [[ ! -f "$INIT_MARKER" ]]; then
     'user'     => '$DB_USER',
     'passwd'   => '$DB_PASS',
 ];
-define('Prefix', \$db_config['prefix']);
+define('Prefix',       \$db_config['prefix']);
+define('ENCRYPT_KEY',  '$ENCRYPT_KEY');
+define('COOKIE_SECRET','$ENCRYPT_KEY');
 try {
     \$dsn = 'mysql:host=' . \$db_config['host'] . ';dbname=' . \$db_config['database'] . ';charset=utf8mb4';
     \$pdo = new \PDO(\$dsn, \$db_config['user'], \$db_config['passwd'], [
@@ -99,7 +112,7 @@ fi
 
 # ── Migrationen ausführen ────────────────────────────────────────────────────
 for mig in /docker-init/sql/migrate_v*.sql; do
-    marker="$WEBROOT/system/.migrated_$(basename "$mig" .sql)"
+    marker="$PERSIST/.migrated_$(basename "$mig" .sql)"
     if [[ ! -f "$marker" ]]; then
         echo "[entrypoint] Migration: $(basename "$mig")"
         sed "s/\[prefix\]/${DB_PREFIX}/g" "$mig" | mysql_cmd
