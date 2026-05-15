@@ -85,6 +85,8 @@ function render_channel(array $ch, int $depth = 0): void {
     margin-bottom: 8px;
   }
   .header .srv-name { font-weight: 600; font-size: 14px; flex: 1; }
+  .header .srv-name a { color: inherit; text-decoration: none; }
+  .header .srv-name a:hover { text-decoration: underline; }
   .header .online {
     font-size: 11px;
     background: #a6e3a1;
@@ -129,7 +131,7 @@ function render_channel(array $ch, int $depth = 0): void {
 </head>
 <body>
 <div class="header">
-  <span class="srv-name">🎮 <?php echo htmlspecialchars((string)$srv['name']); ?></span>
+  <span class="srv-name">🎮 <a href="mumble://<?php echo htmlspecialchars((string)$srv['hostname']); ?>:<?php echo (int)$srv['port']; ?>" title="Mit Mumble verbinden"><?php echo htmlspecialchars((string)$srv['name']); ?></a></span>
   <?php if ($data): ?>
   <span class="online"><?php echo (int)$data['user_count']; ?> online</span>
   <?php endif; ?>
