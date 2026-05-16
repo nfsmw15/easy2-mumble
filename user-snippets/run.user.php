@@ -19,6 +19,13 @@ if (strpos((string)$p, 'mumble') === 0 && $loginsystem->login_session()) {
         $mb_csrf_ok = ($posted !== '' && hash_equals($expected, $posted));
     }
 
+    /* --- AJAX: Dashboard-Daten --- */
+    if ($p === 'mumble_dashboard' && $c === 'dashboard_data') {
+        header('Content-Type: application/json');
+        echo json_encode($mumble->getDashboardData());
+        exit;
+    }
+
     /* --- Server-Aktionen --- */
     if ($p === 'mumble' && in_array($c, ['start','stop','restart','delete'], true)
         && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST')

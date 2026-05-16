@@ -32,6 +32,13 @@ Mitglieder können in einem Webinterface eigene Mumble-Server (Voice-Chat) anleg
 - Live-Statistik (online User, Uptime) mit automatischer Aktualisierung
 - Container-Logs einsehen (100 / 300 / 1000 Zeilen)
 
+### Dashboard
+- Echtzeit-Übersicht aller Server auf einer Seite (`?p=mumble_dashboard`)
+- Zusammenfassungskarten: laufende Server, Nutzer online, Gesamtbandbreite, Ø-Ping
+- Pro-Server: Status, Nutzer X/Y, Uptime, Bandbreite, CPU/RAM, Channels, Bans
+- Globale Nutzertabelle mit Ping-Ampel, Idle-Zeit, OS und Bandwidth pro User
+- Auto-Refresh alle 30 Sekunden — Admin sieht alle, Nutzer nur ihre eigenen
+
 ### ZeroC ICE Integration
 Ab v0.5.0 kommuniziert das Webinterface direkt mit dem laufenden Mumble-Prozess via **ZeroC ICE** — kein Parsing von Logs oder SQLite-Dateien mehr. Alle Änderungen werden sofort aktiv ohne Server-Neustart.
 

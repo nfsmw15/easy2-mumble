@@ -2,6 +2,24 @@
 
 Alle nennenswerten Änderungen an diesem Projekt werden hier dokumentiert.
 
+## [v0.7.0] — 2026-05-16
+
+### Hinzugefügt
+- **Mumble Dashboard** (`mumble_dashboard`) — Echtzeit-Übersicht aller Server auf einer Seite
+  - 4 Zusammenfassungskarten: Server (laufend/gesamt), Nutzer online, Gesamtbandbreite, Ø-Ping
+  - Pro-Server-Karten: Status-Badge, Nutzer X/Y mit Fortschrittsbalken, Uptime, Bandbreite, CPU/RAM, Channels/Bans, Netz RX/TX
+  - Globale Nutzertabelle: User, Server, Channel, KB/s, Ping (farbig), Idle, OS
+  - Automatische Aktualisierung alle 30 Sekunden
+  - Admin sieht alle Server, Nutzer sehen nur ihre eigenen
+- Neue Agent-Methode: `getDashboard()` (GET `/v1/servers/{cid}/dashboard`) — ICE + Docker-Stats in einem Aufruf
+- `_user_to_dict` erweitert: `bytespersec`, `udp_ping`, `tcp_ping`, `tcp_only`, `online_secs`, `os`, `os_version`, `version`
+- DB-Migration `migrate_v0.7.0.sql`: Site `mumble_dashboard` (212), Menüeintrag Dashboard
+
+### Behoben
+- ACL-Verwaltung aus dem Mumble-Menü entfernt — ACL ist nur über die Server-Detailseite erreichbar
+
+---
+
 ## [v0.6.0] — 2026-05-16
 
 ### Hinzugefügt

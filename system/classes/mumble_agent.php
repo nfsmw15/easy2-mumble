@@ -113,6 +113,10 @@ class mumble_agent
     public function enableIce(string $cid): array {
         return $this->request('POST', '/v1/servers/'.rawurlencode($cid).'/ice/enable', null, 30);
     }
+    // Dashboard (ICE + Docker-Stats in einem Aufruf)
+    public function getDashboard(string $cid): array {
+        return $this->request('GET', '/v1/servers/'.rawurlencode($cid).'/dashboard', null, 15);
+    }
 
     private function request(string $method, string $path, mixed $body = null, ?int $timeoutOverride = null): array
     {

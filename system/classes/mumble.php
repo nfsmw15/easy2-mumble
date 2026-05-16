@@ -505,6 +505,50 @@ class mumble extends loginsystem
         ];
     }
 
+    /* ========== Dashboard ========== */
+
+    public function getServers(): array
+    {
+        if ($this->canAdminAll()) {
+            return $this->listAllServers();
+        }
+        $uid = (int)parent::getUser('id');
+        return $this->listServersByOwner($uid);
+    }
+
+    public function getDashboardData(): array
+    {
+        $servers = $this->getServers(); // bereits berechtigungsgeprüft
+        $result  = [];
+        foreach ($servers as $srv) {
+            $fullSrv = $this->getServer((int)$srv['id']);
+            if (!$fullSrv) continue;
+            $srv = $fullSrv;
+            $agent = new mumble_agent($srv['agent_url'], $srv['agent_token']);
+            $dash  = $agent->getDashboard((string)$srv['container_id']);
+            $agentResp = $dash['data'] ?? [];
+            $data = (($agentResp['ok'] ?? false) && isset($agentResp['data'])) ? $agentResp['data'] : [];
+            $result[] = [
+                'id'             => (int)$srv['id'],
+                'name'           => $srv['name'],
+                'port'           => (int)$srv['port'],
+                'max_users'      => (int)$srv['max_users'],
+                'status'         => $data['status'] ?? $srv['status'],
+                'uptime_secs'    => $data['uptime_secs'] ?? 0,
+                'users'          => $data['users'] ?? [],
+                'user_count'     => $data['user_count'] ?? 0,
+                'channel_count'  => $data['channel_count'] ?? 0,
+                'ban_count'      => $data['ban_count'] ?? 0,
+                'cpu_percent'    => $data['cpu_percent'] ?? 0,
+                'mem_mb'         => $data['mem_mb'] ?? 0,
+                'net_rx_mb'      => $data['net_rx_mb'] ?? 0,
+                'net_tx_mb'      => $data['net_tx_mb'] ?? 0,
+                'bandwidth_total'=> array_sum(array_column($data['users'] ?? [], 'bytespersec')),
+            ];
+        }
+        return ['ok' => true, 'servers' => $result];
+    }
+
     /* ========== SuperUser-Passwort ========== */
 
     public function getSuperUserPassword(int $serverId): ?string
