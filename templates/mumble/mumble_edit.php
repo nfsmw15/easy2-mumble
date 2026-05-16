@@ -60,7 +60,8 @@ $mb_widget = $mumble->getWidgetSettings($mb_sid);
 $mb_widget_token   = (string)($mb_widget['widget_token'] ?? '');
 $mb_widget_public  = (bool)($mb_widget['widget_public'] ?? false);
 $mb_widget_refresh = (int)($mb_widget['widget_refresh'] ?? 30);
-$mb_widget_url     = rtrim((string)($_SERVER['REQUEST_SCHEME'] ?? 'https').'://'.(string)($_SERVER['HTTP_HOST'] ?? ''), '/');
+$mb_widget_scheme  = (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? $_SERVER['REQUEST_SCHEME'] ?? 'https') === 'https') ? 'https' : 'http';
+$mb_widget_url     = rtrim($mb_widget_scheme.'://'.(string)($_SERVER['HTTP_HOST'] ?? ''), '/');
 $mb_widget_iframe  = $mb_widget_token !== ''
     ? $mb_widget_url.'/?p=mumble_widget&token='.$mb_widget_token
     : ($mb_widget_public ? $mb_widget_url.'/?p=mumble_widget&id='.$mb_sid : '');
@@ -385,11 +386,151 @@ $mb_widget_iframe  = $mb_widget_token !== ''
                             </button>
                         </div>
                     </div>
+                    <label class="small mb-1"><i class="fa fa-code"></i> iframe-Embed</label>
                     <textarea class="form-control form-control-sm mb-2" id="mb-widget-code" readonly rows="3"
                     ><?php echo htmlspecialchars('<iframe src="'.$mb_widget_iframe.'" width="300" height="400" frameborder="0" scrolling="auto" style="border-radius:8px;border:none;"></iframe>'); ?></textarea>
-                    <button class="btn btn-sm btn-outline-secondary btn-block" id="mb-widget-copy-code">
+                    <button class="btn btn-sm btn-outline-secondary btn-block mb-3" id="mb-widget-copy-code">
                         <i class="fa fa-clipboard"></i> iframe-Code kopieren
                     </button>
+                    <label class="small mb-1"><i class="fa fa-code"></i> JavaScript-Embed <small class="text-muted">(kein iframe, passt sich dem Design an)</small></label>
+                    <?php
+                    $mb_embed_token = $mb_widget_token !== '' ? $mb_widget_token : 'TOKEN';
+                    $mb_embed_js = '<div data-mumble-token="'.$mb_embed_token.'" data-bg="#1a1a2e" data-color-user="#88ff88" data-refresh="30" data-show-empty="0" style="border-radius:8px;min-height:60px"></div>'."\n".'<script src="'.$mb_widget_url.'/system/js/mumble-embed.js"></script>';
+                    ?>
+                    <textarea class="form-control form-control-sm mb-2" id="mb-widget-js-code" readonly rows="4"
+                    ><?php echo htmlspecialchars($mb_embed_js); ?></textarea>
+                    <button class="btn btn-sm btn-outline-secondary btn-block mb-3" id="mb-widget-copy-js">
+                        <i class="fa fa-clipboard"></i> JS-Code kopieren
+                    </button>
+
+                    <!-- Konfigurator -->
+                    <hr>
+                    <p class="small font-weight-bold mb-2"><i class="fa fa-sliders"></i> Konfigurator</p>
+                    <div class="row"
+                         id="mb-wconf"
+                         data-token="<?php echo htmlspecialchars($mb_embed_token, ENT_QUOTES); ?>"
+                         data-api="<?php echo htmlspecialchars($mb_widget_url, ENT_QUOTES); ?>">
+                        <!-- Linke Spalte: Einstellungen -->
+                        <div class="col-md-5">
+
+                            <!-- Hintergrund -->
+                            <div class="form-group mb-2">
+                                <div class="d-flex align-items-center mb-1">
+                                    <div class="custom-control custom-switch mr-2">
+                                        <input type="checkbox" class="custom-control-input wc-opt" id="wc-bg-enabled">
+                                        <label class="custom-control-label small" for="wc-bg-enabled">Hintergrund</label>
+                                    </div>
+                                    <span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;background:#17a2b8;color:#fff;border-radius:50%;font-size:10px;font-weight:bold;cursor:help;flex-shrink:0"
+                                          title="Der Hintergrund des Viewers ist transparent, wenn keine Hintergrundfarbe definiert ist. Mit einem Klick auf die Textbox öffnet sich eine Farbauswahl." data-toggle="tooltip">?</span>
+                                </div>
+                                <div id="wc-bg-options" style="display:none">
+                                    <div class="d-flex align-items-center mb-1">
+                                        <input type="color" id="wc-bg" value="#000000" class="wc-opt mr-2" style="width:36px;height:28px;padding:2px;border:1px solid #ccc;cursor:pointer">
+                                        <input type="text"  id="wc-bg-text" value="#000000" class="form-control form-control-sm wc-text" maxlength="7" style="cursor:pointer" title="Klicken zum Öffnen der Farbauswahl">
+                                    </div>
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input wc-opt" id="wc-bg-transparent">
+                                        <label class="form-check-label small" for="wc-bg-transparent">Transparent</label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <?php foreach ([
+                                ['wc-cs','#000000','Server-Name'],
+                                ['wc-cc','#000000','Channel'],
+                                ['wc-cu','#000000','User'],
+                            ] as [$id,$val,$lbl]): ?>
+                            <div class="form-group mb-2">
+                                <label class="small mb-0"><?php echo $lbl; ?></label>
+                                <div class="d-flex align-items-center">
+                                    <input type="color" id="<?php echo $id; ?>" value="<?php echo $val; ?>" class="wc-opt mr-2" style="width:36px;height:28px;padding:2px;border:1px solid #ccc;cursor:pointer">
+                                    <input type="text"  id="<?php echo $id; ?>-text" value="<?php echo $val; ?>" class="form-control form-control-sm wc-text" maxlength="7" style="cursor:pointer">
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+
+                            <!-- Breite -->
+                            <div class="form-group mb-2">
+                                <div class="d-flex align-items-center mb-1">
+                                    <div class="custom-control custom-switch mr-2">
+                                        <input type="checkbox" class="custom-control-input wc-opt" id="wc-width-enabled">
+                                        <label class="custom-control-label small" for="wc-width-enabled">Breite festlegen</label>
+                                    </div>
+                                    <span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;background:#17a2b8;color:#fff;border-radius:50%;font-size:10px;font-weight:bold;cursor:help;flex-shrink:0"
+                                          title="Die Breite kann nicht kleiner sein als der Mumble Viewer selbst. Mit der Breite von 100% passt sich der Viewer an deine Webseite an. Wenn der Viewer in fixen Elementen (z.B. Tabelle) eingebaut wird, kann die Größe durch das Element angepasst werden.">?</span>
+                                </div>
+                                <div id="wc-width-options" style="display:none">
+                                    <div class="input-group input-group-sm">
+                                        <input type="number" id="wc-width-val" value="100" min="10" max="100" class="form-control wc-opt">
+                                        <div class="input-group-append"><span class="input-group-text">%</span></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Höhe -->
+                            <div class="form-group mb-2">
+                                <div class="d-flex align-items-center mb-1">
+                                    <div class="custom-control custom-switch mr-2">
+                                        <input type="checkbox" class="custom-control-input wc-opt" id="wc-height-enabled">
+                                        <label class="custom-control-label small" for="wc-height-enabled">Feste Höhe</label>
+                                    </div>
+                                    <span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;background:#17a2b8;color:#fff;border-radius:50%;font-size:10px;font-weight:bold;cursor:help;flex-shrink:0"
+                                          title="Du kannst eine feste Höhe angeben. Wenn du diese Option verwendest wird ein Scrollbalken angezeigt.">?</span>
+                                </div>
+                                <div id="wc-height-options" style="display:none">
+                                    <div class="input-group input-group-sm">
+                                        <input type="number" id="wc-height-val" value="400" min="50" max="2000" class="form-control wc-opt">
+                                        <div class="input-group-append"><span class="input-group-text">px</span></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-6">
+                                    <div class="form-group mb-2">
+                                        <label class="small mb-0">Schriftgröße</label>
+                                        <input type="text" id="wc-fs" value="13px" class="form-control form-control-sm wc-opt" maxlength="8">
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="form-group mb-2">
+                                        <label class="small mb-0">Einrückung (px)</label>
+                                        <input type="number" id="wc-indent" value="14" min="4" max="40" class="form-control form-control-sm wc-opt">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group mb-2">
+                                <label class="small mb-0">Refresh (s, 0 = aus)</label>
+                                <input type="number" id="wc-refresh" value="30" min="0" max="300" class="form-control form-control-sm wc-opt">
+                            </div>
+                            <div class="form-group mb-2">
+                                <label class="small mb-0">Icons (Server / Channel / User)</label>
+                                <div class="d-flex">
+                                    <input type="text" id="wc-is" value="🔊" class="form-control form-control-sm wc-opt mr-1" maxlength="4">
+                                    <input type="text" id="wc-ic" value="📢" class="form-control form-control-sm wc-opt mr-1" maxlength="4">
+                                    <input type="text" id="wc-iu" value="🎧" class="form-control form-control-sm wc-opt" maxlength="4">
+                                </div>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input type="checkbox" class="form-check-input wc-opt" id="wc-empty" checked>
+                                <label class="form-check-label small" for="wc-empty">Leere Channels anzeigen</label>
+                            </div>
+                        </div>
+                        <!-- Rechte Spalte: Vorschau -->
+                        <div class="col-md-7">
+                            <label class="small mb-1">Vorschau</label>
+                            <div id="wc-preview" style="border-radius:6px;min-height:100px;overflow-y:auto;font-size:13px;padding:8px">
+                                <span class="text-muted small"><i class="fa fa-spinner fa-spin"></i> Lade…</span>
+                            </div>
+                            <label class="small mb-1 mt-2">Generierter Code</label>
+                            <textarea class="form-control form-control-sm mb-1" id="wc-code" readonly rows="5"></textarea>
+                            <button class="btn btn-sm btn-outline-secondary btn-block" id="wc-copy">
+                                <i class="fa fa-clipboard"></i> Code kopieren
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Ende Konfigurator -->
+
                     <?php if ($mb_widget_token !== '' && !$mb_widget_public): ?>
                     <form method="post" action="?p=mumble_edit&id=<?php echo (int)$mb_srv['id']; ?>&c=widget_regen" class="mt-2">
                         <input type="hidden" name="csrf" value="<?php echo $mb_csrf; ?>">

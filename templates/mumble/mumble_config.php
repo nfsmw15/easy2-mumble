@@ -120,6 +120,12 @@ function cfg(array $c, string $key, mixed $default = ''): mixed {
                                min="0" value="<?php echo (int)cfg($mb_cfg,'usersperchannel',0); ?>">
                     </div>
                     <div class="form-group">
+                        <label>Max. Channel-Tiefe (0=unbegrenzt)</label>
+                        <input type="number" name="channelnestinglimit" class="form-control form-control-sm"
+                               min="0" max="50" value="<?php echo (int)cfg($mb_cfg,'channelnestinglimit',10); ?>">
+                        <small class="text-muted">Standard: 10. Root-Channel zählt nicht mit.</small>
+                    </div>
+                    <div class="form-group">
                         <label>Standard-Channel</label>
                         <?php if ($mb_channels): ?>
                         <select name="defaultchannel" class="form-control form-control-sm">
@@ -270,6 +276,12 @@ function cfg(array $c, string $key, mixed $default = ''): mixed {
                                <?php echo cfg($mb_cfg,'sendversion','true')==='true'?' checked':''; ?>>
                         <label class="form-check-label" for="cfg_sendv">Server-Version an Clients senden</label>
                     </div>
+                    <div class="form-check mb-2">
+                        <input type="checkbox" class="form-check-input" name="allowping" id="cfg_allowping" value="1"
+                               <?php echo cfg($mb_cfg,'allowping','true')==='true'?' checked':''; ?>>
+                        <label class="form-check-label" for="cfg_allowping">Ping-Anfragen beantworten</label>
+                        <small class="form-text text-muted">Deaktivieren um den Server aus Server-Browsern zu verstecken.</small>
+                    </div>
                     <div class="form-check">
                         <input type="checkbox" class="form-check-input" name="bonjour" id="cfg_bonjour" value="1"
                                <?php echo cfg($mb_cfg,'bonjour','false')==='true'?' checked':''; ?>>
@@ -279,6 +291,46 @@ function cfg(array $c, string $key, mixed $default = ''): mixed {
                 </div>
             </div>
         </div>
+
+        <!-- Namens-Regeln -->
+        <div class="card mb-4">
+            <div class="card-header">Namens-Regeln</div>
+            <div class="card-body">
+                <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group mb-0">
+                        <label>Username-Format</label>
+                        <select id="cfg-username-preset" class="form-control form-control-sm mb-1">
+                            <option value="default">Standard (Mumble-Default)</option>
+                            <option value="alphanum">Nur Buchstaben, Zahlen &amp; _ - .</option>
+                            <option value="ascii">Nur ASCII-Zeichen</option>
+                            <option value="custom">Eigener Regex</option>
+                        </select>
+                        <input type="text" name="username" id="cfg-username" class="form-control form-control-sm mb-1"
+                               value="<?php echo htmlspecialchars((string)cfg($mb_cfg,'username','')); ?>"
+                               placeholder="Leer = Mumble-Standard">
+                        <small class="text-danger"><i class="fa fa-exclamation-triangle"></i> Falscher Regex → niemand kann sich verbinden!</small>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group mb-0">
+                        <label>Channel-Name-Format</label>
+                        <select id="cfg-channelname-preset" class="form-control form-control-sm mb-1">
+                            <option value="default">Standard (Mumble-Default)</option>
+                            <option value="alphanum">Nur Buchstaben, Zahlen &amp; Leerzeichen</option>
+                            <option value="ascii">Nur ASCII-Zeichen</option>
+                            <option value="custom">Eigener Regex</option>
+                        </select>
+                        <input type="text" name="channelname" id="cfg-channelname" class="form-control form-control-sm mb-1"
+                               value="<?php echo htmlspecialchars((string)cfg($mb_cfg,'channelname','')); ?>"
+                               placeholder="Leer = Mumble-Standard">
+                        <small class="text-danger"><i class="fa fa-exclamation-triangle"></i> Falscher Regex → Channels können nicht erstellt werden!</small>
+                    </div>
+                </div>
+                </div>
+            </div>
+        </div>
+
         </div><!-- /tab-adv -->
 
     </div><!-- /tab-content -->
@@ -334,3 +386,4 @@ function cfg(array $c, string $key, mixed $default = ''): mixed {
 
 </div>
 </div>
+<script src="system/js/mumble-config.js?v=<?php echo filemtime(__DIR__.'/../../system/js/mumble-config.js'); ?>"></script>

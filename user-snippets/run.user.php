@@ -10,6 +10,25 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *********************************************/
 
+/* --- Öffentlich: Widget-Embed JSON (kein Login, Token-Auth) --- */
+if ($p === 'mumble_widget' && $c === 'embed_data') {
+    header('Content-Type: application/json');
+    header('Access-Control-Allow-Origin: *');
+    $token = trim((string)($_GET['token'] ?? ''));
+    if (empty($token)) { echo json_encode(['ok' => false, 'error' => 'Token fehlt']); exit; }
+    $srv = $mumble->getServerByWidget($token);
+    if (!$srv) { echo json_encode(['ok' => false, 'error' => 'Widget nicht verfügbar']); exit; }
+    $agent = new mumble_agent((string)$srv['agent_url'], (string)$srv['agent_token']);
+    $res = $agent->getViewer((string)$srv['container_id']);
+    if (!$res['ok'] || empty($res['data']['channels'])) {
+        echo json_encode(['ok' => false, 'error' => 'Server nicht erreichbar']); exit;
+    }
+    $ch = $res['data']['channels'];
+    $ch['name'] = (string)$srv['name'];
+    echo json_encode(['ok' => true, 'server' => (string)$srv['name'], 'channels' => $ch]);
+    exit;
+}
+
 if (strpos((string)$p, 'mumble') === 0 && $loginsystem->login_session()) {
 
     $mb_csrf_ok = true;

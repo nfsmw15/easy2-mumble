@@ -77,6 +77,8 @@
     }
     copyText('mb-widget-url', 'mb-widget-copy-url');
     copyText('mb-widget-code', 'mb-widget-copy-code');
+    copyText('mb-widget-js-code', 'mb-widget-copy-js');
+    copyText('wc-code', 'wc-copy');
 
     // --- Channel-Viewer ---
     var viewerBox  = document.getElementById('mb-viewer-content');
@@ -304,6 +306,177 @@
                 settingsBtn.innerHTML = '<i class="fa fa-save"></i> Speichern';
             });
         });
+    }
+
+    // --- Widget-Konfigurator ---
+    var wconf = document.getElementById('mb-wconf');
+    if (wconf) {
+        var wcToken  = wconf.getAttribute('data-token');
+        var wcApi    = wconf.getAttribute('data-api') || '';
+        var wcPreview = document.getElementById('wc-preview');
+        var wcCode    = document.getElementById('wc-code');
+        var wcData    = null;
+
+        function esc(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
+
+        function wcGet(id) { return document.getElementById(id); }
+
+        function wcVal(id) {
+            var el = wcGet(id);
+            if (!el) return '';
+            return el.type === 'checkbox' ? el.checked : el.value;
+        }
+
+        function wcOpts() {
+            var bgEnabled     = wcGet('wc-bg-enabled') && wcGet('wc-bg-enabled').checked;
+            var bgTransparent = wcGet('wc-bg-transparent') && wcGet('wc-bg-transparent').checked;
+            var widthEnabled  = wcGet('wc-width-enabled') && wcGet('wc-width-enabled').checked;
+            var heightEnabled = wcGet('wc-height-enabled') && wcGet('wc-height-enabled').checked;
+            return {
+                bg:          !bgEnabled ? 'transparent' : (bgTransparent ? 'transparent' : wcVal('wc-bg')),
+                colorServer: wcVal('wc-cs'),
+                colorChannel:wcVal('wc-cc'),
+                colorUser:   wcVal('wc-cu'),
+                fontSize:    wcVal('wc-fs'),
+                indent:      wcVal('wc-indent') || '14',
+                width:       widthEnabled  ? wcVal('wc-width-val') + '%' : '',
+                maxHeight:   heightEnabled ? wcVal('wc-height-val') + 'px' : '',
+                refresh:     wcVal('wc-refresh') || '0',
+                iconServer:  wcVal('wc-is'),
+                iconChannel: wcVal('wc-ic'),
+                iconUser:    wcVal('wc-iu'),
+                showEmpty:   wcVal('wc-empty'),
+            };
+        }
+
+        function renderCh(ch, depth, opts) {
+            var html = '';
+            var indent = depth * parseInt(opts.indent);
+            var isRoot = depth === 0;
+            var hasUsers = ch.users && ch.users.length > 0;
+            var hasChildren = ch.children && ch.children.length > 0;
+            if (!isRoot && !opts.showEmpty && !hasUsers && !hasChildren) return '';
+            var icon  = isRoot ? opts.iconServer : (hasUsers ? opts.iconChannel : opts.iconChannel);
+            var color = isRoot ? opts.colorServer : opts.colorChannel;
+            html += '<div style="padding:2px 0 2px ' + indent + 'px;color:' + color + ';font-weight:' + (isRoot ? 'bold' : 'normal') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">';
+            html += icon + ' ' + esc(ch.name);
+            if (hasUsers && !isRoot) html += ' <span style="opacity:0.5;font-size:.85em">(' + ch.users.length + ')</span>';
+            html += '</div>';
+            if (hasUsers) ch.users.forEach(function(u) {
+                var name = typeof u === 'string' ? u : (u.name || '?');
+                html += '<div style="padding:2px 0 2px ' + (indent + parseInt(opts.indent)) + 'px;color:' + opts.colorUser + '">'
+                      + opts.iconUser + ' ' + esc(name) + '</div>';
+            });
+            if (hasChildren) ch.children.forEach(function(c) { html += renderCh(c, depth + 1, opts); });
+            return html;
+        }
+
+        function wcRender() {
+            var opts = wcOpts();
+            wcPreview.style.background = opts.bg;
+            wcPreview.style.fontSize   = opts.fontSize;
+            wcPreview.style.maxHeight  = opts.maxHeight;
+            wcPreview.style.overflowY  = opts.maxHeight ? 'auto' : 'visible';
+            if (wcData) wcPreview.innerHTML = renderCh(wcData, 0, opts);
+
+            var style = 'border-radius:8px;min-height:60px;';
+            if (opts.width)     style += 'width:' + opts.width + ';';
+            if (opts.maxHeight) style += 'max-height:' + opts.maxHeight + ';overflow-y:auto;';
+
+            var attrs = 'data-mumble-token="' + wcToken + '"'
+                + ' data-bg="' + opts.bg + '"'
+                + ' data-color-server="' + opts.colorServer + '"'
+                + ' data-color-channel="' + opts.colorChannel + '"'
+                + ' data-color-user="' + opts.colorUser + '"'
+                + ' data-fontsize="' + opts.fontSize + '"'
+                + ' data-indent="' + opts.indent + '"'
+                + (opts.maxHeight ? ' data-max-height="' + opts.maxHeight + '"' : '')
+                + ' data-refresh="' + opts.refresh + '"'
+                + ' data-icon-server="' + opts.iconServer + '"'
+                + ' data-icon-channel="' + opts.iconChannel + '"'
+                + ' data-icon-user="' + opts.iconUser + '"'
+                + ' data-show-empty="' + (opts.showEmpty ? '1' : '0') + '"'
+                + ' style="' + style + '"';
+            wcCode.value = '<div ' + attrs + '></div>\n'
+                + '<script src="' + wcApi + '/system/js/mumble-embed.js"><\/script>';
+        }
+
+        function wcFetch() {
+            fetch(wcApi + '/?p=mumble_widget&c=embed_data&token=' + encodeURIComponent(wcToken))
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d.ok) { wcData = d.channels; wcRender(); }
+                    else wcPreview.innerHTML = '<span style="color:#f66;font-size:.9em">' + esc(d.error) + '</span>';
+                })
+                .catch(function() { wcPreview.innerHTML = '<span style="color:#f66;font-size:.9em">Verbindungsfehler</span>'; });
+        }
+
+        // Sync color picker ↔ text input
+        ['bg','cs','cc','cu'].forEach(function(k) {
+            var picker = wcGet('wc-' + k);
+            var text   = wcGet('wc-' + k + '-text');
+            if (!picker || !text) return;
+            picker.addEventListener('input', function() { text.value = picker.value; wcRender(); });
+            text.addEventListener('input', function() {
+                if (/^#[0-9a-fA-F]{6}$/.test(text.value)) { picker.value = text.value; }
+                wcRender();
+            });
+        });
+        // Hintergrund-Toggle: Options-Bereich ein-/ausblenden
+        var bgEnabledCb = wcGet('wc-bg-enabled');
+        if (bgEnabledCb) {
+            bgEnabledCb.addEventListener('change', function() {
+                var opts = wcGet('wc-bg-options');
+                if (opts) opts.style.display = bgEnabledCb.checked ? '' : 'none';
+                wcRender();
+            });
+        }
+        // Transparent-Checkbox: Picker + Text deaktivieren wenn aktiv
+        var bgTransCb = wcGet('wc-bg-transparent');
+        if (bgTransCb) {
+            bgTransCb.addEventListener('change', function() {
+                var disabled = bgTransCb.checked;
+                wcGet('wc-bg').disabled      = disabled;
+                wcGet('wc-bg-text').disabled = disabled;
+                wcRender();
+            });
+        }
+        // Klick auf Textbox öffnet Farbpicker
+        ['bg','cs','cc','cu'].forEach(function(k) {
+            var text   = wcGet('wc-' + k + '-text');
+            var picker = wcGet('wc-' + k);
+            if (text && picker) {
+                text.addEventListener('click', function() { if (!text.disabled) picker.click(); });
+            }
+        });
+        // Breite-Toggle
+        var widthCb = wcGet('wc-width-enabled');
+        if (widthCb) {
+            widthCb.addEventListener('change', function() {
+                var el = wcGet('wc-width-options');
+                if (el) el.style.display = widthCb.checked ? '' : 'none';
+                wcRender();
+            });
+        }
+        // Höhe-Toggle
+        var heightCb = wcGet('wc-height-enabled');
+        if (heightCb) {
+            heightCb.addEventListener('change', function() {
+                var el = wcGet('wc-height-options');
+                if (el) el.style.display = heightCb.checked ? '' : 'none';
+                wcRender();
+            });
+        }
+
+        wconf.querySelectorAll('.wc-opt').forEach(function(el) {
+            el.addEventListener('input', wcRender);
+            el.addEventListener('change', wcRender);
+        });
+
+        wcFetch();
     }
 
 })();
