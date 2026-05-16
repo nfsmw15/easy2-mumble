@@ -2,6 +2,52 @@
 
 Alle nennenswerten Änderungen an diesem Projekt werden hier dokumentiert.
 
+## [v0.6.0] — 2026-05-16
+
+### Hinzugefügt
+- **Channel-Verwaltung** (`mumble_channels`) — Channel-Baum mit visueller Hierarchie (`├─` / `└─` / `│`), Channel erstellen/umbenennen/löschen, Sub-Channels, alles live via ICE ohne Neustart
+- **Ban-Verwaltung** (`mumble_bans`) — aktive IP-Bans anzeigen, neue Bans setzen (IP, Subnetz-Bits, Dauer, Grund, Username), Bans aufheben — alles live via ICE
+- **Einstellungen live speichern** — Name, Passwort, Max-Nutzer und Begrüßungstext werden via ICE `setConf()` sofort übernommen, kein Server-Neustart mehr nötig; der Button heißt jetzt "Speichern" statt "Speichern & Neustart"
+- **Kick & Mute im Channel-Viewer** — User direkt aus dem Viewer per Klick kicken oder stummschalten (ICE `kickUser()` / `setState()`)
+- Neue Agent-Methoden: `updateSettingsLive()` (PATCH `/v1/servers/{cid}/live`)
+- Neue PHP-Methoden: `updateMumbleSettingsLive()`, `addMumbleChannel()`, `updateMumbleChannel()`, `removeMumbleChannel()`, `getMumbleBans()`, `setMumbleBans()`
+- DB-Migration `migrate_v0.6.0.sql`: Sites für `mumble_channels` (207) und `mumble_bans` (208)
+
+### Geändert
+- `mumble_edit.php`: "Einstellungen bearbeiten" nutzt jetzt AJAX statt Form-POST, kein Neustart
+- `mumble_edit.php`: "Channels verwalten" und "Bans verwalten" als Aktions-Buttons
+- `mumble-edit.js`: Settings-Handler ergänzt (live save via `fetch()`)
+- `mumble_widget.php`: `htmlspecialchars()` erwartet String — ICE-User-Objekte werden jetzt korrekt zu Namen extrahiert
+
+### Behoben
+- **Löschen-Berechtigung** — "Server löschen" ist jetzt nur noch für Admins (`canAdminAll()`) möglich, nicht mehr für zugewiesene Nutzer; Button wird in Übersicht und Detailseite entsprechend ausgeblendet
+- **ICE-Port-Konflikt** bei mehreren Containern im `--network host` Modus — jeder Container muss einen eigenen ICE-Port bekommen (`MUMBLE_CONFIG_ICE` Env-Variable beim Erstellen setzen)
+
+---
+
+## [v0.5.0] — 2026-05-16
+
+### Hinzugefügt
+- **ZeroC ICE Integration** — ersetzt das bisherige Log-/SQLite-Parsing vollständig durch die native Mumble-ICE-Schnittstelle
+  - Live Channel-Viewer: exakte Channel-Struktur, User-Positionen und Mute/Deaf-Status direkt aus Mumble
+  - ICE-Port wird automatisch aus der Container-Konfiguration gelesen (Grep auf `/data/mumble_server_config.ini`)
+  - Fallback auf Port 6502 wenn kein ICE-Port konfiguriert
+- **ACL-Verwaltung** (`mumble_acl`) — vollständiger ACL-Editor mit Channel-Baum, ACL-Einträge (Gruppe/User, Grant/Deny, Hier/Sub), Gruppen-Verwaltung (Mitglieder hinzufügen/entfernen), Berechtigungs-Modal mit allen 14 Mumble-Permissions — alles live via ICE ohne Neustart
+- Neue Agent-Methoden: `getChannelAcl()`, `setChannelAcl()`, `getLiveUsers()`, `kickUser()`, `updateUser()`, `getChannels()`, `addChannel()`, `updateChannel()`, `removeChannel()`, `getBans()`, `setBans()`
+- Neue PHP-Methoden in `mumble.php`: `getLiveUsers()`, `kickMumbleUser()`, `muteMumbleUser()`, `getMumbleChannels()`, `getChannelAcl()`, `setChannelAcl()`
+- DB-Migration `migrate_v0.5.0.sql`: Site `mumble_acl` (206), Regel `mumble_acl` (205), Menüeintrag
+
+### Geändert
+- `mumble-edit.js`: Channel-Viewer rendert jetzt ICE-User-Objekte (`{session, name, mute, deaf, …}`) statt einfacher Strings
+- `mumble_edit.php`: Kick- und Mute-Buttons im Channel-Viewer, neue Aktions-Buttons (ACL, Channels, Bans)
+- `run.user.php`: `viewer_data`-Handler funktioniert jetzt für `mumble_edit` **und** `mumble_acl`
+
+### Behoben
+- ICE `loadSlice()` erwartet Liste, nicht String (zeroc-ice 3.8 API)
+- ICE-Port-Berechnung via `mumble_port + 10000` kann `> 65535` sein — ersetzt durch Config-Grep mit Fallback 6502
+
+---
+
 ## [v0.4.0] — 2026-05-15
 
 ### Hinzugefügt

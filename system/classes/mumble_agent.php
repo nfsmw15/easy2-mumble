@@ -70,6 +70,49 @@ class mumble_agent
         return $this->request('PUT', '/v1/servers/'.rawurlencode($cid).'/config',
             ['content' => $content], 30);
     }
+    public function getChannelAcl(string $cid, int $channelId): array {
+        return $this->request('GET', '/v1/servers/'.rawurlencode($cid).'/acl?channel_id='.$channelId, null, 15);
+    }
+    public function setChannelAcl(string $cid, array $data): array {
+        return $this->request('PUT', '/v1/servers/'.rawurlencode($cid).'/acl', $data, 15);
+    }
+    // Live-User (ICE)
+    public function getLiveUsers(string $cid): array {
+        return $this->request('GET', '/v1/servers/'.rawurlencode($cid).'/users', null, 10);
+    }
+    public function kickUser(string $cid, int $session, string $reason = ''): array {
+        return $this->request('POST', '/v1/servers/'.rawurlencode($cid).'/users/'.rawurlencode((string)$session).'/kick', ['reason' => $reason], 10);
+    }
+    public function updateUser(string $cid, int $session, array $data): array {
+        return $this->request('PATCH', '/v1/servers/'.rawurlencode($cid).'/users/'.rawurlencode((string)$session), $data, 10);
+    }
+    // Channels (ICE)
+    public function getChannels(string $cid): array {
+        return $this->request('GET', '/v1/servers/'.rawurlencode($cid).'/channels', null, 10);
+    }
+    public function addChannel(string $cid, string $name, int $parent = 0): array {
+        return $this->request('POST', '/v1/servers/'.rawurlencode($cid).'/channels', ['name' => $name, 'parent' => $parent], 10);
+    }
+    public function updateChannel(string $cid, int $channelId, array $data): array {
+        return $this->request('PATCH', '/v1/servers/'.rawurlencode($cid).'/channels/'.rawurlencode((string)$channelId), $data, 10);
+    }
+    public function removeChannel(string $cid, int $channelId): array {
+        return $this->request('DELETE', '/v1/servers/'.rawurlencode($cid).'/channels/'.rawurlencode((string)$channelId), null, 10);
+    }
+    // Bans (ICE)
+    public function getBans(string $cid): array {
+        return $this->request('GET', '/v1/servers/'.rawurlencode($cid).'/bans', null, 10);
+    }
+    public function setBans(string $cid, array $bans): array {
+        return $this->request('PUT', '/v1/servers/'.rawurlencode($cid).'/bans', ['bans' => $bans], 10);
+    }
+    public function updateSettingsLive(string $cid, array $data): array {
+        return $this->request('PATCH', '/v1/servers/'.rawurlencode($cid).'/live', $data, 15);
+    }
+    // ICE aktivieren
+    public function enableIce(string $cid): array {
+        return $this->request('POST', '/v1/servers/'.rawurlencode($cid).'/ice/enable', null, 30);
+    }
 
     private function request(string $method, string $path, mixed $body = null, ?int $timeoutOverride = null): array
     {

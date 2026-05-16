@@ -79,31 +79,64 @@
     copyText('mb-widget-code', 'mb-widget-copy-code');
 
     // --- Channel-Viewer ---
-    var viewerBox    = document.getElementById('mb-viewer-content');
-    var viewerUrl    = viewerBox ? viewerBox.getAttribute('data-viewer-url') : null;
-    var serverName   = viewerBox ? (viewerBox.getAttribute('data-server-name') || '') : '';
-    var refreshTimer = null;
+    var viewerBox  = document.getElementById('mb-viewer-content');
+    var viewerUrl  = viewerBox ? viewerBox.getAttribute('data-viewer-url') : null;
+    var kickUrl    = viewerBox ? viewerBox.getAttribute('data-kick-url')   : null;
+    var muteUrl    = viewerBox ? viewerBox.getAttribute('data-mute-url')   : null;
+    var csrf       = viewerBox ? viewerBox.getAttribute('data-csrf')       : '';
+    var canManage  = viewerBox ? viewerBox.getAttribute('data-can-manage') === '1' : false;
+    var serverName = viewerBox ? (viewerBox.getAttribute('data-server-name') || '') : '';
+
+    function escHtml(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
 
     function renderChannel(ch, depth) {
         depth = depth || 0;
         var indent = depth * 14;
         var html = '';
-        var icon = depth === 0 ? '🔊' : '📁';
-        html += '<div style="padding-left:' + indent + 'px;display:flex;align-items:center;gap:5px;padding-top:3px;padding-bottom:3px;font-weight:600;color:#4a90d9;">';
-        html += '<span style="font-size:12px;">' + icon + '</span>';
-        html += '<span>' + escHtml(ch.name) + '</span></div>';
+        html += '<div style="padding-left:' + indent + 'px;display:flex;align-items:center;gap:5px;'
+              + 'padding-top:3px;padding-bottom:3px;font-weight:600;color:#4a90d9;">'
+              + '<span style="font-size:12px;">' + (depth === 0 ? '🔊' : '📁') + '</span>'
+              + '<span>' + escHtml(ch.name) + '</span></div>';
+
         (ch.users || []).forEach(function (u) {
-            html += '<div style="padding-left:' + (indent + 16) + 'px;display:flex;align-items:center;gap:5px;padding-top:2px;padding-bottom:2px;color:#555;">';
-            html += '<span style="font-size:12px;">🎧</span><span>' + escHtml(u) + '</span></div>';
+            // ICE: u ist Objekt {session, name, mute, deaf, self_mute, ...}
+            // Log-Parsing (alt): u ist String
+            var name    = (typeof u === 'object') ? u.name    : u;
+            var session = (typeof u === 'object') ? u.session : null;
+            var muted   = (typeof u === 'object') && (u.mute || u.self_mute);
+            var deafened= (typeof u === 'object') && (u.deaf || u.self_deaf);
+            var icons   = '';
+            if (muted)    icons += ' <span title="Stumm" style="color:#e67e22;font-size:11px;">🔇</span>';
+            if (deafened) icons += ' <span title="Taub"  style="color:#e74c3c;font-size:11px;">🔕</span>';
+
+            html += '<div style="padding-left:' + (indent + 16) + 'px;display:flex;align-items:center;'
+                  + 'justify-content:space-between;padding-top:2px;padding-bottom:2px;color:#555;">'
+                  + '<span style="display:flex;align-items:center;gap:4px;">'
+                  + '<span style="font-size:12px;">🎧</span>'
+                  + '<span>' + escHtml(name) + icons + '</span>'
+                  + '</span>';
+
+            if (canManage && session !== null) {
+                html += '<span style="display:flex;gap:3px;">'
+                      + '<button class="btn btn-xs btn-outline-secondary mb-mute-btn" '
+                      + 'data-session="' + session + '" data-mute="' + (!muted ? '1' : '0') + '" '
+                      + 'title="' + (muted ? 'Stummschaltung aufheben' : 'Stummschalten') + '" '
+                      + 'style="padding:1px 5px;font-size:11px;">'
+                      + (muted ? '🔊' : '🔇') + '</button>'
+                      + '<button class="btn btn-xs btn-outline-danger mb-kick-btn" '
+                      + 'data-session="' + session + '" data-name="' + escHtml(name) + '" '
+                      + 'title="Kicken" style="padding:1px 5px;font-size:11px;">✕</button>'
+                      + '</span>';
+            }
+            html += '</div>';
         });
+
         (ch.children || []).forEach(function (child) {
             html += renderChannel(child, depth + 1);
         });
         return html;
-    }
-
-    function escHtml(s) {
-        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
     function loadViewer() {
@@ -115,20 +148,43 @@
                     viewerBox.innerHTML = '<p class="text-muted small p-3 mb-0">Server nicht erreichbar.</p>';
                     return;
                 }
-                var html = '<div style="padding:8px;font-family:\'Segoe UI\',sans-serif;font-size:13px;">';
-                html += '<div style="margin-bottom:6px;font-size:11px;color:#888;">';
-                html += '<strong>' + (data.user_count || 0) + '</strong> Nutzer online';
-                html += '</div>';
-                // Server-Namen als Root-Anzeige verwenden
-                if (serverName && data.channels) {
-                    data.channels.name = serverName;
-                }
-                html += renderChannel(data.channels);
-                html += '</div>';
+                if (serverName && data.channels) { data.channels.name = serverName; }
+                var html = '<div style="padding:8px;font-family:\'Segoe UI\',sans-serif;font-size:13px;">'
+                         + '<div style="margin-bottom:6px;font-size:11px;color:#888;">'
+                         + '<strong>' + (data.user_count || 0) + '</strong> Nutzer online</div>'
+                         + renderChannel(data.channels)
+                         + '</div>';
                 viewerBox.innerHTML = html;
 
-                // Refresh-Intervall aus den Widget-Settings lesen (via data-Attribut)
-                // Kein Auto-Refresh im Admin-View — nur manuell per Button
+                // Kick-Button
+                viewerBox.querySelectorAll('.mb-kick-btn').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        var sess = btn.getAttribute('data-session');
+                        var name = btn.getAttribute('data-name');
+                        var reason = prompt('Grund für Kick von ' + name + ' (leer lassen = kein Grund):');
+                        if (reason === null) return;
+                        fetch(kickUrl, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({csrf: csrf, session: parseInt(sess), reason: reason})
+                        }).then(function(r){ return r.json(); })
+                          .then(function(d){ if (d.ok) { setTimeout(loadViewer, 800); } else { alert('Fehler: ' + d.error); } });
+                    });
+                });
+
+                // Mute-Button
+                viewerBox.querySelectorAll('.mb-mute-btn').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        var sess = btn.getAttribute('data-session');
+                        var mute = btn.getAttribute('data-mute') === '1';
+                        fetch(muteUrl, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({csrf: csrf, session: parseInt(sess), mute: mute})
+                        }).then(function(r){ return r.json(); })
+                          .then(function(d){ if (d.ok) { setTimeout(loadViewer, 800); } else { alert('Fehler: ' + d.error); } });
+                    });
+                });
             })
             .catch(function () {
                 viewerBox.innerHTML = '<p class="text-muted small p-3 mb-0">Viewer nicht verfügbar.</p>';
@@ -136,13 +192,8 @@
     }
 
     var refreshBtn = document.getElementById('mb-viewer-refresh');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', loadViewer);
-    }
-
-    if (viewerBox && viewerUrl) {
-        loadViewer();
-    }
+    if (refreshBtn) { refreshBtn.addEventListener('click', loadViewer); }
+    if (viewerBox && viewerUrl) { loadViewer(); }
 
     // --- Live-Usersuche für Mitglieder ---
     var memberSearch  = document.getElementById('mb-member-search');
@@ -208,6 +259,50 @@
             if (memberUid && memberUid.value) {
                 memberForm.submit();
             }
+        });
+    }
+
+    // --- Einstellungen live speichern (ICE, kein Neustart) ---
+    var settingsBtn = document.getElementById('mb-settings-save-btn');
+    if (settingsBtn) {
+        var settingsCard = settingsBtn.closest('[data-settings-sid]');
+        var settingsSid  = settingsCard ? settingsCard.getAttribute('data-settings-sid') : null;
+        var settingsCsrf = settingsCard ? settingsCard.getAttribute('data-settings-csrf') : null;
+        var settingsStatus = document.getElementById('mb-settings-status');
+
+        settingsBtn.addEventListener('click', function () {
+            if (!settingsSid) return;
+            var payload = {
+                csrf:         settingsCsrf,
+                name:         document.getElementById('mb-set-name').value.trim(),
+                password:     document.getElementById('mb-set-password').value,
+                max_users:    parseInt(document.getElementById('mb-set-max-users').value) || 1,
+                welcome_text: document.getElementById('mb-set-welcome').value
+            };
+            settingsBtn.disabled = true;
+            settingsBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Speichere...';
+            settingsStatus.innerHTML = '';
+
+            fetch('?p=mumble_edit&c=settings_save&id=' + settingsSid, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.ok) {
+                    settingsStatus.innerHTML = '<span class="text-success"><i class="fa fa-check"></i> Gespeichert.</span>';
+                } else {
+                    settingsStatus.innerHTML = '<span class="text-danger"><i class="fa fa-times"></i> ' + (data.error || 'Fehler') + '</span>';
+                }
+            })
+            .catch(function () {
+                settingsStatus.innerHTML = '<span class="text-danger"><i class="fa fa-times"></i> Verbindungsfehler</span>';
+            })
+            .finally(function () {
+                settingsBtn.disabled = false;
+                settingsBtn.innerHTML = '<i class="fa fa-save"></i> Speichern';
+            });
         });
     }
 

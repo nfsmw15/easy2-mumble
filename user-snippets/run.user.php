@@ -146,6 +146,27 @@ if (strpos((string)$p, 'mumble') === 0 && $loginsystem->login_session()) {
         }
     }
 
+    /* --- Einstellungen via ICE live speichern (kein Neustart) --- */
+    if ($p === 'mumble_edit' && $c === 'settings_save'
+        && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST')
+    {
+        header('Content-Type: application/json');
+        $raw = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        if (!hash_equals((string)($_SESSION['ml_csrfToken'] ?? ''), (string)($raw['csrf'] ?? ''))) {
+            echo json_encode(['ok' => false, 'error' => 'CSRF-Token ungültig']); exit;
+        }
+        $sid = (int)($_GET['id'] ?? 0);
+        if (!$mumble->canManageServer($sid)) { echo json_encode(['ok' => false, 'error' => 'Keine Berechtigung']); exit; }
+        $data = [
+            'name'         => (string)($raw['name'] ?? ''),
+            'password'     => (string)($raw['password'] ?? ''),
+            'max_users'    => (int)($raw['max_users'] ?? 10),
+            'welcome_text' => (string)($raw['welcome_text'] ?? ''),
+        ];
+        echo json_encode($mumble->updateMumbleSettingsLive($sid, $data));
+        exit;
+    }
+
     /* --- Server-Einstellungen bearbeiten --- */
     if ($p === 'mumble_edit' && $c === 'update_settings'
         && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST')
@@ -315,8 +336,209 @@ if (strpos((string)$p, 'mumble') === 0 && $loginsystem->login_session()) {
         exit;
     }
 
+    /* --- AJAX: Live-User --- */
+    if ($p === 'mumble_edit' && $c === 'live_users') {
+        header('Content-Type: application/json');
+        $sid = (int)($_GET['id'] ?? 0);
+        if (!$mumble->canManageServer($sid)) { echo json_encode(['ok'=>false,'error'=>'Keine Berechtigung']); exit; }
+        $res = $mumble->getLiveUsers($sid);
+        echo json_encode($res['ok'] ? ($res['data'] ?? $res) : $res);
+        exit;
+    }
+
+    /* --- AJAX: Kick --- */
+    if ($p === 'mumble_edit' && $c === 'kick_user'
+        && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST')
+    {
+        header('Content-Type: application/json');
+        $raw     = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        $posted  = (string)($raw['csrf'] ?? '');
+        $expected= (string)($_SESSION['ml_csrfToken'] ?? '');
+        if (!hash_equals($expected, $posted)) { echo json_encode(['ok'=>false,'error'=>'CSRF']); exit; }
+        $sid     = (int)($_GET['id'] ?? 0);
+        $session = (int)($raw['session'] ?? 0);
+        $reason  = (string)($raw['reason'] ?? '');
+        if (!$mumble->canManageServer($sid)) { echo json_encode(['ok'=>false,'error'=>'Keine Berechtigung']); exit; }
+        echo json_encode($mumble->kickMumbleUser($sid, $session, $reason));
+        exit;
+    }
+
+    /* --- AJAX: User stumm/verschieben --- */
+    if ($p === 'mumble_edit' && $c === 'update_user'
+        && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST')
+    {
+        header('Content-Type: application/json');
+        $raw     = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        $posted  = (string)($raw['csrf'] ?? '');
+        $expected= (string)($_SESSION['ml_csrfToken'] ?? '');
+        if (!hash_equals($expected, $posted)) { echo json_encode(['ok'=>false,'error'=>'CSRF']); exit; }
+        $sid     = (int)($_GET['id'] ?? 0);
+        $session = (int)($raw['session'] ?? 0);
+        if (!$mumble->canManageServer($sid)) { echo json_encode(['ok'=>false,'error'=>'Keine Berechtigung']); exit; }
+        $data = [];
+        if (isset($raw['mute']))    $data['mute']    = (bool)$raw['mute'];
+        if (isset($raw['channel'])) $data['channel'] = (int)$raw['channel'];
+        echo json_encode(
+            isset($data['mute'])    ? $mumble->muteMumbleUser($sid, $session, $data['mute']) :
+           (isset($data['channel']) ? $mumble->moveMumbleUser($sid, $session, $data['channel']) :
+            ['ok'=>false,'error'=>'Keine Aktion'])
+        );
+        exit;
+    }
+
+    /* --- AJAX: Channel-Daten --- */
+    if ($p === 'mumble_channels' && $c === 'channels_data') {
+        header('Content-Type: application/json');
+        $sid = (int)($_GET['id'] ?? 0);
+        if (!$mumble->canManageServer($sid)) { echo json_encode(['ok'=>false,'error'=>'Keine Berechtigung']); exit; }
+        $res = $mumble->getMumbleChannels($sid);
+        echo json_encode($res['ok'] ? ($res['data'] ?? $res) : $res);
+        exit;
+    }
+
+    /* --- Channel hinzufügen --- */
+    if ($p === 'mumble_channels' && $c === 'channel_add'
+        && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST')
+    {
+        header('Content-Type: application/json');
+        $raw  = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        if (!hash_equals((string)($_SESSION['ml_csrfToken'] ?? ''), (string)($raw['csrf'] ?? '')))
+            { echo json_encode(['ok'=>false,'error'=>'CSRF']); exit; }
+        $sid  = (int)($_GET['id'] ?? 0);
+        if (!$mumble->canManageServer($sid)) { echo json_encode(['ok'=>false,'error'=>'Keine Berechtigung']); exit; }
+        $res  = $mumble->addMumbleChannel($sid, (string)($raw['name'] ?? ''), (int)($raw['parent'] ?? 0));
+        echo json_encode($res['ok'] ? ['ok'=>true,'channel_id'=>$res['data']['channel_id']??null] : $res);
+        exit;
+    }
+
+    /* --- Channel aktualisieren --- */
+    if ($p === 'mumble_channels' && $c === 'channel_update'
+        && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST')
+    {
+        header('Content-Type: application/json');
+        $raw  = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        if (!hash_equals((string)($_SESSION['ml_csrfToken'] ?? ''), (string)($raw['csrf'] ?? '')))
+            { echo json_encode(['ok'=>false,'error'=>'CSRF']); exit; }
+        $sid  = (int)($_GET['id'] ?? 0);
+        $cid  = (int)($raw['channel_id'] ?? 0);
+        if (!$mumble->canManageServer($sid)) { echo json_encode(['ok'=>false,'error'=>'Keine Berechtigung']); exit; }
+        $data = [];
+        if (isset($raw['name']))        $data['name']        = (string)$raw['name'];
+        if (isset($raw['description'])) $data['description'] = (string)$raw['description'];
+        if (isset($raw['position']))    $data['position']    = (int)$raw['position'];
+        echo json_encode($mumble->updateMumbleChannel($sid, $cid, $data));
+        exit;
+    }
+
+    /* --- Channel löschen --- */
+    if ($p === 'mumble_channels' && $c === 'channel_delete'
+        && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST')
+    {
+        header('Content-Type: application/json');
+        $raw  = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        if (!hash_equals((string)($_SESSION['ml_csrfToken'] ?? ''), (string)($raw['csrf'] ?? '')))
+            { echo json_encode(['ok'=>false,'error'=>'CSRF']); exit; }
+        $sid  = (int)($_GET['id'] ?? 0);
+        $cid  = (int)($raw['channel_id'] ?? 0);
+        if (!$mumble->canManageServer($sid) || $cid === 0)
+            { echo json_encode(['ok'=>false,'error'=>'Nicht erlaubt']); exit; }
+        echo json_encode($mumble->removeMumbleChannel($sid, $cid));
+        exit;
+    }
+
+    /* --- AJAX: Bans laden --- */
+    if ($p === 'mumble_bans' && $c === 'bans_data') {
+        header('Content-Type: application/json');
+        $sid = (int)($_GET['id'] ?? 0);
+        if (!$mumble->canManageServer($sid)) { echo json_encode(['ok'=>false,'error'=>'Keine Berechtigung']); exit; }
+        $res = $mumble->getMumbleBans($sid);
+        echo json_encode($res['ok'] ? ($res['data'] ?? $res) : $res);
+        exit;
+    }
+
+    /* --- Bans speichern --- */
+    if ($p === 'mumble_bans' && $c === 'bans_save'
+        && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST')
+    {
+        header('Content-Type: application/json');
+        $raw  = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
+        if (!hash_equals((string)($_SESSION['ml_csrfToken'] ?? ''), (string)($raw['csrf'] ?? '')))
+            { echo json_encode(['ok'=>false,'error'=>'CSRF']); exit; }
+        $sid  = (int)($_GET['id'] ?? 0);
+        if (!$mumble->canManageServer($sid)) { echo json_encode(['ok'=>false,'error'=>'Keine Berechtigung']); exit; }
+        $bans = is_array($raw['bans'] ?? null) ? $raw['bans'] : [];
+        echo json_encode($mumble->setMumbleBans($sid, $bans));
+        exit;
+    }
+
+    /* --- AJAX: ACL-Daten lesen --- */
+    if ($p === 'mumble_acl' && $c === 'acl_data') {
+        header('Content-Type: application/json');
+        $sid = (int)($_GET['id'] ?? 0);
+        $cid = (int)($_GET['channel_id'] ?? 0);
+        if (!$mumble->canManageServer($sid)) {
+            echo json_encode(['ok' => false, 'error' => 'Keine Berechtigung']);
+        } else {
+            $res = $mumble->getChannelAcl($sid, $cid);
+            echo json_encode($res['ok'] ? $res['data'] ?? $res : $res);
+        }
+        exit;
+    }
+
+    /* --- ACL speichern --- */
+    if ($p === 'mumble_acl' && $c === 'save_acl'
+        && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST')
+    {
+        header('Content-Type: application/json');
+        $sid = (int)($_GET['id'] ?? 0);
+        $raw = file_get_contents('php://input');
+        $payload = json_decode($raw ?: '{}', true) ?: [];
+
+        $posted   = (string)($payload['csrf'] ?? '');
+        $expected = (string)($_SESSION['ml_csrfToken'] ?? '');
+        if ($posted === '' || !hash_equals($expected, $posted)) {
+            echo json_encode(['ok' => false, 'error' => 'CSRF-Token ungültig']);
+            exit;
+        }
+        if (!$mumble->canManageServer($sid)) {
+            echo json_encode(['ok' => false, 'error' => 'Keine Berechtigung']);
+            exit;
+        }
+
+        $channelId   = (int)($payload['channel_id'] ?? 0);
+        $inheritAcl  = !empty($payload['inherit_acl']);
+        $aclEntries  = is_array($payload['acl'] ?? null)    ? $payload['acl']    : [];
+        $groupData   = is_array($payload['groups'] ?? null) ? $payload['groups'] : [];
+
+        // Eingaben bereinigen
+        $aclClean = array_map(function(array $e): array {
+            return [
+                'user_id'    => isset($e['user_id']) && $e['user_id'] !== null ? (int)$e['user_id'] : null,
+                'group'      => isset($e['group'])   && $e['group'] !== null   ? (string)$e['group'] : null,
+                'apply_here' => !empty($e['apply_here']),
+                'apply_sub'  => !empty($e['apply_sub']),
+                'grant'      => (int)($e['grant'] ?? 0),
+                'deny'       => (int)($e['deny']  ?? 0),
+            ];
+        }, $aclEntries);
+
+        $groupClean = array_map(function(array $g): array {
+            return [
+                'name'           => (string)($g['name'] ?? ''),
+                'inherit'        => !empty($g['inherit']),
+                'inheritable'    => !empty($g['inheritable']),
+                'members_add'    => array_map('intval', (array)($g['members_add']    ?? [])),
+                'members_remove' => array_map('intval', (array)($g['members_remove'] ?? [])),
+            ];
+        }, $groupData);
+
+        $res = $mumble->setChannelAcl($sid, $channelId, $inheritAcl, $aclClean, $groupClean);
+        echo json_encode($res['ok'] ? ['ok' => true] : ['ok' => false, 'error' => $res['error'] ?? 'Unbekannter Fehler']);
+        exit;
+    }
+
     /* --- AJAX: Channel-Viewer-Daten --- */
-    if ($p === 'mumble_edit' && $c === 'viewer_data') {
+    if (in_array($p, ['mumble_edit', 'mumble_acl'], true) && $c === 'viewer_data') {
         header('Content-Type: application/json');
         $sid = (int)($_GET['id'] ?? 0);
         $data = $mumble->getViewer($sid);

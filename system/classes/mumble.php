@@ -334,7 +334,11 @@ class mumble extends loginsystem
         if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
 
         $uid = (int)parent::getUser('id');
-        if (!$this->canAdminAll() && (int)$srv['owner_user_id'] !== $uid) {
+        if ($action === 'delete') {
+            if (!$this->canAdminAll()) {
+                return ['ok' => false, 'error' => 'Nur Administratoren können Server löschen'];
+            }
+        } elseif (!$this->canAdminAll() && (int)$srv['owner_user_id'] !== $uid) {
             return ['ok' => false, 'error' => 'Keine Berechtigung'];
         }
 
@@ -607,6 +611,39 @@ class mumble extends loginsystem
     }
 
     /* ========== Server-Eckdaten ändern ========== */
+
+    public function updateMumbleSettingsLive(int $serverId, array $data): array
+    {
+        $srv = $this->getServer($serverId);
+        if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
+
+        if (!$this->canManageServer($serverId)) {
+            return ['ok' => false, 'error' => 'Keine Berechtigung'];
+        }
+
+        $agent = new mumble_agent($srv['agent_url'], $srv['agent_token']);
+        $payload = [];
+        if (isset($data['name']))         $payload['name']         = substr((string)$data['name'], 0, 64);
+        if (isset($data['password']))     $payload['password']     = (string)$data['password'];
+        if (isset($data['max_users']))    $payload['max_users']    = max(1, (int)$data['max_users']);
+        if (isset($data['welcome_text'])) $payload['welcome_text'] = (string)$data['welcome_text'];
+
+        $res = $agent->updateSettingsLive((string)$srv['container_id'], $payload);
+        if (!$res['ok']) return $res;
+
+        // DB aktualisieren
+        $fields = ['updated_at = NOW()'];
+        $params = [':id' => $serverId];
+        if (isset($payload['name']))         { $fields[] = 'name = :name';         $params[':name'] = $payload['name']; }
+        if (isset($payload['password']))     { $fields[] = 'password = :pw';       $params[':pw']   = $payload['password']; }
+        if (isset($payload['max_users']))    { $fields[] = 'max_users = :mu';      $params[':mu']   = $payload['max_users']; }
+        if (isset($payload['welcome_text'])) { $fields[] = 'welcome_text = :wt';   $params[':wt']   = $payload['welcome_text']; }
+        $this->pdo->prepare(
+            "UPDATE `".Prefix."_mumble_server` SET ".implode(', ', $fields)." WHERE id = :id"
+        )->execute($params);
+
+        return ['ok' => true];
+    }
 
     public function updateServerSettings(int $serverId, array $data): array
     {
@@ -894,5 +931,157 @@ class mumble extends loginsystem
             );
             $stmt->execute([':c' => $newCid, ':id' => $serverId]);
         } catch (\Throwable) {}
+    }
+
+    /* ========== Live-User-Verwaltung (ICE) ========== */
+
+    public function getLiveUsers(int $serverId): array
+    {
+        $srv = $this->getServer($serverId);
+        if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
+        if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
+        $agent = new mumble_agent($srv['agent_url'], $srv['agent_token']);
+        return $agent->getLiveUsers((string)$srv['container_id']);
+    }
+
+    public function kickMumbleUser(int $serverId, int $session, string $reason = ''): array
+    {
+        $srv = $this->getServer($serverId);
+        if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
+        if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
+        $uid   = (int)parent::getUser('id');
+        $agent = new mumble_agent($srv['agent_url'], $srv['agent_token']);
+        $res   = $agent->kickUser((string)$srv['container_id'], $session, $reason);
+        if ($res['ok']) {
+            $this->log($serverId, $uid, 'kick', "session={$session} reason={$reason}");
+        }
+        return $res;
+    }
+
+    public function muteMumbleUser(int $serverId, int $session, bool $mute): array
+    {
+        $srv = $this->getServer($serverId);
+        if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
+        if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
+        $agent = new mumble_agent($srv['agent_url'], $srv['agent_token']);
+        return $agent->updateUser((string)$srv['container_id'], $session, ['mute' => $mute]);
+    }
+
+    public function moveMumbleUser(int $serverId, int $session, int $channelId): array
+    {
+        $srv = $this->getServer($serverId);
+        if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
+        if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
+        $agent = new mumble_agent($srv['agent_url'], $srv['agent_token']);
+        return $agent->updateUser((string)$srv['container_id'], $session, ['channel' => $channelId]);
+    }
+
+    /* ========== Channel-Verwaltung (ICE) ========== */
+
+    public function getMumbleChannels(int $serverId): array
+    {
+        $srv = $this->getServer($serverId);
+        if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
+        if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
+        $agent = new mumble_agent($srv['agent_url'], $srv['agent_token']);
+        return $agent->getChannels((string)$srv['container_id']);
+    }
+
+    public function addMumbleChannel(int $serverId, string $name, int $parent = 0): array
+    {
+        $srv = $this->getServer($serverId);
+        if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
+        if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
+        $uid   = (int)parent::getUser('id');
+        $agent = new mumble_agent($srv['agent_url'], $srv['agent_token']);
+        $res   = $agent->addChannel((string)$srv['container_id'], $name, $parent);
+        if ($res['ok']) {
+            $this->log($serverId, $uid, 'channel_add', "name={$name} parent={$parent}");
+        }
+        return $res;
+    }
+
+    public function updateMumbleChannel(int $serverId, int $channelId, array $data): array
+    {
+        $srv = $this->getServer($serverId);
+        if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
+        if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
+        $uid   = (int)parent::getUser('id');
+        $agent = new mumble_agent($srv['agent_url'], $srv['agent_token']);
+        $res   = $agent->updateChannel((string)$srv['container_id'], $channelId, $data);
+        if ($res['ok']) {
+            $this->log($serverId, $uid, 'channel_update', "id={$channelId}");
+        }
+        return $res;
+    }
+
+    public function removeMumbleChannel(int $serverId, int $channelId): array
+    {
+        $srv = $this->getServer($serverId);
+        if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
+        if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
+        $uid   = (int)parent::getUser('id');
+        $agent = new mumble_agent($srv['agent_url'], $srv['agent_token']);
+        $res   = $agent->removeChannel((string)$srv['container_id'], $channelId);
+        if ($res['ok']) {
+            $this->log($serverId, $uid, 'channel_remove', "id={$channelId}");
+        }
+        return $res;
+    }
+
+    /* ========== Ban-Verwaltung (ICE) ========== */
+
+    public function getMumbleBans(int $serverId): array
+    {
+        $srv = $this->getServer($serverId);
+        if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
+        if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
+        $agent = new mumble_agent($srv['agent_url'], $srv['agent_token']);
+        return $agent->getBans((string)$srv['container_id']);
+    }
+
+    public function setMumbleBans(int $serverId, array $bans): array
+    {
+        $srv = $this->getServer($serverId);
+        if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
+        if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
+        $uid   = (int)parent::getUser('id');
+        $agent = new mumble_agent($srv['agent_url'], $srv['agent_token']);
+        $res   = $agent->setBans((string)$srv['container_id'], $bans);
+        if ($res['ok']) {
+            $this->log($serverId, $uid, 'bans_update', 'count='.count($bans));
+        }
+        return $res;
+    }
+
+    /* ========== ACL-Verwaltung ========== */
+
+    public function getChannelAcl(int $serverId, int $channelId): array
+    {
+        $srv = $this->getServer($serverId);
+        if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
+        if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
+        $agent = new mumble_agent($srv['agent_url'], $srv['agent_token']);
+        $res = $agent->getChannelAcl((string)$srv['container_id'], $channelId);
+        return $res;
+    }
+
+    public function setChannelAcl(int $serverId, int $channelId, bool $inheritAcl, array $aclEntries, array $groups): array
+    {
+        $srv = $this->getServer($serverId);
+        if (!$srv) return ['ok' => false, 'error' => 'Server nicht gefunden'];
+        if (!$this->canManageServer($serverId)) return ['ok' => false, 'error' => 'Keine Berechtigung'];
+        $uid = (int)parent::getUser('id');
+        $agent = new mumble_agent($srv['agent_url'], $srv['agent_token']);
+        $res = $agent->setChannelAcl((string)$srv['container_id'], [
+            'channel_id'  => $channelId,
+            'inherit_acl' => $inheritAcl,
+            'acl'         => $aclEntries,
+            'groups'      => $groups,
+        ]);
+        if ($res['ok']) {
+            $this->log($serverId, $uid, 'acl_update', "channel={$channelId}");
+        }
+        return $res;
     }
 }

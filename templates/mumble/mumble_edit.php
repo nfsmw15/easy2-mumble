@@ -188,6 +188,10 @@ $mb_widget_iframe  = $mb_widget_token !== ''
                 <div class="card-body p-0">
                     <div id="mb-viewer-content" style="min-height:60px;"
                          data-viewer-url="?p=mumble_edit&amp;id=<?php echo (int)$mb_srv['id']; ?>&amp;c=viewer_data"
+                         data-kick-url="?p=mumble_edit&amp;id=<?php echo (int)$mb_srv['id']; ?>&amp;c=kick_user"
+                         data-mute-url="?p=mumble_edit&amp;id=<?php echo (int)$mb_srv['id']; ?>&amp;c=update_user"
+                         data-csrf="<?php echo htmlspecialchars($mb_csrf); ?>"
+                         data-can-manage="<?php echo $mumble->canManageServer($mb_sid) ? '1' : '0'; ?>"
                          data-refresh="<?php echo $mb_widget_refresh; ?>"
                          data-server-name="<?php echo htmlspecialchars((string)$mb_srv['name']); ?>">
                         <div class="p-3 text-muted text-center small">
@@ -239,6 +243,19 @@ $mb_widget_iframe  = $mb_widget_token !== ''
                        class="btn btn-outline-dark btn-block mb-2">
                         <i class="fa fa-file-code-o"></i> Server-Config (INI) bearbeiten
                     </a>
+                    <a href="?p=mumble_acl&id=<?php echo (int)$mb_srv['id']; ?>"
+                       class="btn btn-outline-primary btn-block mb-2">
+                        <i class="fa fa-key"></i> ACL / Rechte verwalten
+                    </a>
+                    <a href="?p=mumble_channels&id=<?php echo (int)$mb_srv['id']; ?>"
+                       class="btn btn-outline-info btn-block mb-2">
+                        <i class="fa fa-sitemap"></i> Channels verwalten
+                    </a>
+                    <a href="?p=mumble_bans&id=<?php echo (int)$mb_srv['id']; ?>"
+                       class="btn btn-outline-warning btn-block mb-2">
+                        <i class="fa fa-ban"></i> Bans verwalten
+                    </a>
+                    <?php if ($mumble->isOwner($mb_sid) || $mumble->canAdminAll()): ?>
                     <hr>
                     <form id="mb-form-delete" method="post" action="?p=mumble&c=delete">
                         <input type="hidden" name="csrf" value="<?php echo $mb_csrf; ?>">
@@ -247,46 +264,43 @@ $mb_widget_iframe  = $mb_widget_token !== ''
                             <i class="fa fa-trash"></i> Server löschen
                         </button>
                     </form>
+                    <?php endif; ?>
                 </div>
             </div>
 
             <!-- Server-Einstellungen bearbeiten -->
-            <div class="card mb-4">
+            <div class="card mb-4"
+                 data-settings-sid="<?php echo (int)$mb_srv['id']; ?>"
+                 data-settings-csrf="<?php echo htmlspecialchars($mb_csrf, ENT_QUOTES); ?>">
                 <div class="card-header"><i class="fa fa-pencil"></i> Einstellungen bearbeiten</div>
                 <div class="card-body">
-                    <form method="post" action="?p=mumble_edit&id=<?php echo (int)$mb_srv['id']; ?>&c=update_settings">
-                        <input type="hidden" name="csrf" value="<?php echo $mb_csrf; ?>">
-                        <div class="form-group">
-                            <label>Server-Name</label>
-                            <input type="text" class="form-control form-control-sm" name="name"
-                                   maxlength="64"
-                                   value="<?php echo htmlspecialchars((string)$mb_srv['name']); ?>">
-                        </div>
-                        <div class="form-group">
-                            <label>Server-Passwort <small class="text-muted">(leer = öffentlich)</small></label>
-                            <input type="text" class="form-control form-control-sm" name="password"
-                                   maxlength="64" autocomplete="off"
-                                   value="<?php echo htmlspecialchars((string)$mb_srv['password']); ?>">
-                        </div>
-                        <div class="form-group">
-                            <label>Maximale Nutzer</label>
-                            <input type="number" class="form-control form-control-sm" name="max_users"
-                                   min="1" max="500"
-                                   value="<?php echo (int)$mb_srv['max_users']; ?>">
-                        </div>
-                        <div class="form-group">
-                            <label>Begrüßungstext</label>
-                            <textarea class="form-control form-control-sm" name="welcome_text"
-                                      rows="3" maxlength="2000"><?php echo htmlspecialchars((string)$mb_srv['welcome_text']); ?></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary btn-block">
-                            <i class="fa fa-save"></i> Speichern &amp; Neustart
-                        </button>
-                        <small class="form-text text-muted text-center">
-                            Der Server wird nach dem Speichern automatisch neu gestartet,
-                            damit die Änderungen aktiv werden.
-                        </small>
-                    </form>
+                    <div class="form-group">
+                        <label>Server-Name</label>
+                        <input type="text" class="form-control form-control-sm" id="mb-set-name"
+                               maxlength="64"
+                               value="<?php echo htmlspecialchars((string)$mb_srv['name']); ?>">
+                    </div>
+                    <div class="form-group">
+                        <label>Server-Passwort <small class="text-muted">(leer = öffentlich)</small></label>
+                        <input type="text" class="form-control form-control-sm" id="mb-set-password"
+                               maxlength="64" autocomplete="off"
+                               value="<?php echo htmlspecialchars((string)$mb_srv['password']); ?>">
+                    </div>
+                    <div class="form-group">
+                        <label>Maximale Nutzer</label>
+                        <input type="number" class="form-control form-control-sm" id="mb-set-max-users"
+                               min="1" max="500"
+                               value="<?php echo (int)$mb_srv['max_users']; ?>">
+                    </div>
+                    <div class="form-group">
+                        <label>Begrüßungstext</label>
+                        <textarea class="form-control form-control-sm" id="mb-set-welcome"
+                                  rows="3" maxlength="2000"><?php echo htmlspecialchars((string)$mb_srv['welcome_text']); ?></textarea>
+                    </div>
+                    <button class="btn btn-primary btn-block" id="mb-settings-save-btn">
+                        <i class="fa fa-save"></i> Speichern
+                    </button>
+                    <div id="mb-settings-status" class="mt-2 text-center small"></div>
                 </div>
             </div>
 

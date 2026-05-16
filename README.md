@@ -26,41 +26,66 @@ Mitglieder können in einem Webinterface eigene Mumble-Server (Voice-Chat) anleg
 ## Features
 
 ### Server-Verwaltung
-- Server anlegen, löschen, starten, stoppen, neu starten
-- Server-Passwort, maximale Nutzerzahl und Begrüßungstext konfigurierbar
-- Rohe INI-Konfiguration direkt im Browser bearbeiten
+- Server anlegen, starten, stoppen, neu starten (Löschen nur für Admins)
+- **Einstellungen live ändern** (Name, Passwort, Max-Nutzer, Begrüßungstext) via ZeroC ICE — **kein Neustart** nötig
+- Server-Config (INI) direkt im Browser bearbeiten (erfordert Neustart)
 - Live-Statistik (online User, Uptime) mit automatischer Aktualisierung
 - Container-Logs einsehen (100 / 300 / 1000 Zeilen)
 
-### SuperUser-Zugang
-- SuperUser-Passwort wird beim Server-Start automatisch aus den Logs ausgelesen und gespeichert
-- Passwort im Webinterface anzeigen (Ein-Klick-Reveal) und kopieren
-- Passwort jederzeit zurücksetzen (zufällig oder eigenes)
+### ZeroC ICE Integration
+Ab v0.5.0 kommuniziert das Webinterface direkt mit dem laufenden Mumble-Prozess via **ZeroC ICE** — kein Parsing von Logs oder SQLite-Dateien mehr. Alle Änderungen werden sofort aktiv ohne Server-Neustart.
 
 ### Channel-Viewer
-- Zeigt die Channel-Struktur und aktuell verbundene Nutzer in Echtzeit
-- Liest Daten direkt aus der SQLite-Datenbank und den Container-Logs — **kein Mumble-Client-Connect**, keine Unterbrechung für verbundene Nutzer
+- Zeigt die Channel-Struktur und aktuell verbundene Nutzer in Echtzeit via ICE
+- Mute/Deaf-Status pro User sichtbar
+- User direkt aus dem Viewer **kicken** oder **stummschalten** (ohne Neustart)
 - Manuell aktualisierbar per Button
+
+### ACL-Verwaltung
+- Vollständiger ACL-Editor für jeden Channel (`?p=mumble_acl`)
+- Einträge pro Gruppe oder registrierten User mit Grant/Deny pro Permission
+- Flags: "Gilt für diesen Channel" / "Gilt für Unter-Channels"
+- Alle 14 Mumble-Permissions (Betreten, Sprechen, Kicken, Bannen, …)
+- Gruppen verwalten (erstellen, Mitglieder hinzufügen/entfernen, Vererbung)
+- Änderungen werden **sofort live** übernommen — kein Neustart
+
+### Channel-Verwaltung
+- Channel-Baum mit visueller Hierarchie (`├─` / `└─` / `│`) (`?p=mumble_channels`)
+- Channels erstellen (Root und Sub-Channels), umbenennen, löschen
+- Sortierungs-Position und Beschreibung bearbeitbar
+- Änderungen **sofort live** via ICE
+
+### Ban-Verwaltung
+- Aktive IP-Bans auflisten, neue Bans setzen (`?p=mumble_bans`)
+- IP-Adresse, Subnetz-Bits, Dauer (Minuten, 0 = permanent), Grund, Username
+- Bans einzeln aufheben
+- Änderungen **sofort live** via ICE
+
+### SuperUser-Zugang
+- SuperUser-Passwort anzeigen (Ein-Klick-Reveal) und kopieren
+- Passwort jederzeit zurücksetzen (zufällig oder eigenes)
 
 ### Einbettbares Widget
 - Öffentliche Seite (`?p=mumble_widget`) für jeden Server, einbettbar per `<iframe>`
-- Drei Zugriffsmodi pro Server: **Öffentlich** (nur Server-ID), **Token-geschützt** (eigener Zugangsschlüssel) oder **Deaktiviert**
-- Konfigurierbares Auto-Refresh-Intervall (0 = kein Auto-Refresh)
-- Fertiger iframe-Code und Widget-URL zum Kopieren direkt im Dashboard
-- Token kann jederzeit neu generiert werden (invalidiert bestehende Einbettungen)
+- Drei Zugriffsmodi: **Öffentlich**, **Token-geschützt** oder **Deaktiviert**
+- Konfigurierbares Auto-Refresh-Intervall
+- Fertiger iframe-Code und Widget-URL im Dashboard
 
 ### Administration
 - Quota-System pro Rang (max. Server, max. Nutzer)
 - Mehrere Mumble-Hosts unterstützt
 - Audit-Log aller Aktionen
-- SB-Admin-konformes Dashboard-Widget (Übersicht aller Server)
+- Server löschen nur für Admins möglich
+- SB-Admin-konformes Dashboard-Widget
 
 ## Voraussetzungen
 
 - Easy2-PHP8 Branch `main-dashboard`
 - PHP 8.1+ mit PDO/MySQL und cURL
 - MySQL/MariaDB (utf8mb4, InnoDB)
-- Mindestens ein Linux-Server mit Docker und [mumble-agent](https://github.com/nfsmw15/mumble-agent)
+- Mindestens ein Linux-Server mit Docker und [mumble-agent](https://github.com/nfsmw15/mumble-agent) **≥ v2.0.0** (mit ZeroC ICE)
+- Mumble-Server-Container mit aktiviertem ICE-Endpoint (`MUMBLE_CONFIG_ICE=tcp -h 127.0.0.1 -p 6502`)
+- Bei mehreren Containern auf demselben Host (`--network host`): **jeder Container braucht einen eigenen ICE-Port** (z.B. 6502, 6503, 6504…) via `MUMBLE_CONFIG_ICE`
 
 ## Verzeichnisstruktur
 
@@ -75,7 +100,10 @@ easy2-mumble/
 ├── templates/mumble/
 │   ├── mumble.php                 →  Übersicht aller Server
 │   ├── mumble_new.php             →  Server anlegen
-│   ├── mumble_edit.php            →  Server-Details, Channel-Viewer, Widget-Einstellungen
+│   ├── mumble_edit.php            →  Server-Details, Channel-Viewer, Einstellungen
+│   ├── mumble_acl.php             →  ACL-Verwaltung (ICE, live)
+│   ├── mumble_channels.php        →  Channel-Verwaltung (ICE, live)
+│   ├── mumble_bans.php            →  Ban-Verwaltung (ICE, live)
 │   ├── mumble_logs.php            →  Container-Logs
 │   ├── mumble_config.php          →  INI-Editor
 │   ├── mumble_widget.php          →  Öffentlich einbettbarer Channel-Viewer
@@ -85,6 +113,8 @@ easy2-mumble/
 ├── sql/
 │   ├── install.sql
 │   ├── migrate_v0.3.0.sql
+│   ├── migrate_v0.5.0.sql         →  ACL-Seite, Regel, Menüeintrag
+│   ├── migrate_v0.6.0.sql         →  Channels- und Bans-Seiten
 │   └── uninstall.sql
 ├── user-snippets/
 │   ├── classes.run.user.php

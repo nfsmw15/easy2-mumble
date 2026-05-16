@@ -48,7 +48,8 @@ function render_channel(array $ch, int $depth = 0): void {
     echo '</div>';
     foreach ($ch['users'] as $user) {
         echo '<div class="user" style="padding-left:' . ($indent + 16) . 'px">';
-        echo '<span class="u-icon">🎧</span> ' . htmlspecialchars($user);
+        $uname = is_array($user) ? ($user['name'] ?? '') : (string)$user;
+        echo '<span class="u-icon">🎧</span> ' . htmlspecialchars($uname);
         echo '</div>';
     }
     foreach ($ch['children'] as $child) {

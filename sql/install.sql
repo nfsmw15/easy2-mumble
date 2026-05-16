@@ -97,7 +97,10 @@ VALUES
   (202, 'mumble_edit',  'mumble/', 'Mumble-Server bearbeiten',0, 0, 0, 'php', 0),
   (203, 'mumble_logs',  'mumble/', 'Mumble-Server Logs',      0, 0, 0, 'php', 0),
   (204, 'mumble_hosts', 'mumble/', 'Mumble-Hosts verwalten',  0, 0, 0, 'php', 0),
-  (205, 'mumble_quota', 'mumble/', 'Mumble-Quotas verwalten', 0, 0, 0, 'php', 0)
+  (205, 'mumble_quota', 'mumble/', 'Mumble-Quotas verwalten', 0, 0, 0, 'php', 0),
+  (206, 'mumble_acl',      'mumble/', 'Mumble-ACL verwalten',        0, 0, 0, 'php', 0),
+  (207, 'mumble_channels', 'mumble/', 'Mumble-Channels verwalten',   0, 0, 0, 'php', 0),
+  (208, 'mumble_bans',     'mumble/', 'Mumble-Bans verwalten',       0, 0, 0, 'php', 0)
 ON DUPLICATE KEY UPDATE `title`=VALUES(`title`);
 
 INSERT INTO `[prefix]_ml_rules` (`id`, `name`, `tag`, `description`) VALUES
@@ -105,7 +108,8 @@ INSERT INTO `[prefix]_ml_rules` (`id`, `name`, `tag`, `description`) VALUES
   (201, 'Mumble: Server erstellen',     'mumble_create', 'Darf neue Mumble-Server anlegen'),
   (202, 'Mumble: Fremdserver verwalten','mumble_admin',  'Darf alle Mumble-Server verwalten'),
   (203, 'Mumble: Hosts verwalten',      'mumble_hosts',  'Darf Mumble-Hosts anlegen/bearbeiten'),
-  (204, 'Mumble: Quotas verwalten',     'mumble_quota',  'Darf Quota-Regeln pro Rang bearbeiten')
+  (204, 'Mumble: Quotas verwalten',     'mumble_quota',  'Darf Quota-Regeln pro Rang bearbeiten'),
+  (205, 'Mumble: ACL verwalten',        'mumble_acl',    'Darf Mumble-Server-ACLs bearbeiten')
 ON DUPLICATE KEY UPDATE `name`=VALUES(`name`), `description`=VALUES(`description`);
 
 INSERT INTO `[prefix]_ml_menu`
@@ -115,5 +119,6 @@ VALUES
   (201, 200, 'Meine Server',    'fa-list',        0, '', 200, 1, 0, '_self'),
   (202, 201, 'Neuer Server',    'fa-plus',        1, '', 200, 1, 0, '_self'),
   (203, 204, 'Hosts verwalten', 'fa-server',      2, '', 200, 1, 0, '_self'),
-  (204, 205, 'Quotas',          'fa-tachometer',  3, '', 200, 1, 0, '_self')
+  (204, 205, 'Quotas',          'fa-tachometer',  3, '', 200, 1, 0, '_self'),
+  (205, 206, 'ACL-Verwaltung',  'fa-key',         4, '', 200, 1, 0, '_self')
 ON DUPLICATE KEY UPDATE `title`=VALUES(`title`), `icon`=VALUES(`icon`);

@@ -167,6 +167,7 @@ $mb_statusIcon = static fn(string $s): string => match ($s) {
                                                    href="?p=mumble_edit&id=<?php echo (int)$s['id']; ?>">
                                                     <i class="fa fa-info-circle"></i>
                                                 </a>
+                                                <?php if ($mb_isAdmin): ?>
                                                 <form method="post" action="?p=mumble&c=delete" class="d-inline"
                                                       onsubmit="return confirm('Server &quot;<?php echo htmlspecialchars((string)$s['name'], ENT_QUOTES); ?>&quot; wirklich endgültig löschen?');">
                                                     <input type="hidden" name="csrf" value="<?php echo $mb_csrf; ?>">
@@ -175,6 +176,7 @@ $mb_statusIcon = static fn(string $s): string => match ($s) {
                                                         <i class="fa fa-trash"></i>
                                                     </button>
                                                 </form>
+                                                <?php endif; ?>
                                             </div>
                                         </td>
                                     </tr>
